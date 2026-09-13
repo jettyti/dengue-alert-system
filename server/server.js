@@ -154,12 +154,20 @@ function normalizePhone(raw) {
 function friendlyError(err) {
   const data = err.response?.data;
   const status = err.response?.status;
+  // Always log the raw response so the real reason is visible in Render's
+  // Logs tab, even in cases below where we can't turn it into a clean
+  // one-line message for the UI.
+  if (data !== undefined) console.error('[DengueAlert] Semaphore raw error response:', JSON.stringify(data));
   if (status === 401 || status === 403)
     return 'Semaphore API key rejected — check SEMAPHORE_API_KEY in server/.env';
+  if (typeof data === 'string' && data.trim()) return data.trim().slice(0, 200);
   if (data?.message) return data.message;
+  if (data?.error)   return typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
   if (Array.isArray(data) && data[0]?.message) return data[0].message;
+  if (Array.isArray(data?.errors) && data.errors.length) return data.errors.join('; ');
   if (err.code === 'ECONNABORTED') return 'Semaphore request timed out — check your internet connection';
   if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') return 'Cannot reach Semaphore API — check internet/firewall';
+  if (status) return `Semaphore API returned HTTP ${status} — check Render Logs for the raw response, and check semaphore.co for any account issues (credit balance, account status)`;
   return err.message || 'Unknown error sending SMS';
 }
 

@@ -41,11 +41,11 @@ const USERS = []; // kept for localStorage fallback only (no hardcoded accounts)
 // where the server is. In production it points straight at Render.
 const SMS_SERVER_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.protocol}//${window.location.host}`
-  : 'https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com'; // ← paste your Render service URL here after step 3 below
+  : 'https://dengue-alert-system.onrender.com'; // ← paste your Render service URL here after step 3 below
 
 // Must match the API_KEY you set in Render's environment variables (see
 // RENDER_DEPLOYMENT.md) — sent as the X-API-Key header on every /send call.
-const SMS_SERVER_API_KEY = 'REPLACE-WITH-YOUR-API_KEY-VALUE';
+const SMS_SERVER_API_KEY = '9d247581aa63ede8060c4f59208e38b7a4395f541f429037';
 
 // ── SYSTEM CONFIG ────────────────────────────────────────────
 const SYSTEM_CONFIG = {
@@ -315,7 +315,11 @@ const SMS = {
   _headers() { const h = { 'Content-Type': 'application/json' }; if (SMS_SERVER_API_KEY) h['X-API-Key'] = SMS_SERVER_API_KEY; return h; },
   _compose(subject, message) { return subject ? `${subject}\n\n${message}` : message; },
   async checkServer() {
-    try { const res = await fetch(`${SMS_SERVER_URL}/health`, { signal: AbortSignal.timeout(3000) }); this.serverOnline = res.ok; return res.ok; }
+    // 20s, not 3s: Render's free tier sleeps after ~15min idle and takes
+    // 30-60s to wake on the first request. A short timeout here was
+    // misreading a waking-up server as "offline" and silently routing
+    // real messages into demo mode instead of actually sending them.
+    try { const res = await fetch(`${SMS_SERVER_URL}/health`, { signal: AbortSignal.timeout(20000) }); this.serverOnline = res.ok; return res.ok; }
     catch { this.serverOnline = false; return false; }
   },
   async send(to, toName, subject, message, type = 'advisory', sentBy = '', barangay = null) {
@@ -353,7 +357,7 @@ const SMS = {
     if (!online) {
       console.warn('[DengueAlert] SMS server offline — logging as demo');
       await DB.logSms({ type, subject, to: 'demo (server offline)', count: recipients.length, sentBy });
-      return { success: true, demo: true, sent: recipients.length, failed: 0 };
+      return { success: false, demo: true, sent: 0, failed: recipients.length };
     }
     try {
       // 30s timeout — parallel sends are fast, this is more than enough
@@ -366,7 +370,16 @@ const SMS = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Server returned error');
       await DB.logSms({ type, subject, to: `${data.sent} of ${recipients.length} recipients`, count: data.sent, sentBy });
-      return { success: true, sent: data.sent, failed: data.failed };
+      // If nothing actually got through, pull the real reason from the
+      // per-recipient results (e.g. "Semaphore API key rejected", "Invalid
+      // Philippine mobile number") instead of leaving the UI to show a
+      // generic "check the server" message that doesn't say what's wrong.
+      let errorMsg;
+      if (data.sent === 0 && Array.isArray(data.results)) {
+        const firstFailure = data.results.find(r => !r.success);
+        errorMsg = firstFailure?.error;
+      }
+      return { success: true, sent: data.sent, failed: data.failed, error: errorMsg };
     } catch (err) {
       console.error('[DengueAlert] sendBulk failed:', err.message);
       return { success: false, error: err.message, sent: 0, failed: recipients.length };
