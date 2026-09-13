@@ -567,10 +567,15 @@
               <button class="rec-tab" onclick="setRecipient(this,'specific')">Specific Barangay</button>
             </div>
             <div id="brgy-select-wrap" style="display:none;margin-top:6px">
-              <select class="form-input" id="email-brgy-target">
+              <select class="form-input" id="email-brgy-target" onchange="updateRecipientCount()">
                 <option value="">Select barangay...</option>
               </select>
             </div>
+            <label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12.5px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="confirmed-only-toggle" checked onchange="updateRecipientCount()">
+              Confirmed cases only <span style="color:var(--muted);font-weight:400">(uncheck to also include Pending-review patients)</span>
+            </label>
+            <div id="rhu-recipient-count" style="font-size:12px;margin-top:4px;color:var(--muted)"></div>
           </div>
 
           <div class="form-group">
@@ -924,7 +929,7 @@ function showPage(id) {
   if (id === 'riskmap')   loadRiskMap();
   if (id === 'alerts')    loadAlerts();
   if (id === 'pending')   loadPending();
-  if (id === 'emailcomposer') { loadEmailLog(); updateEmailPreview(); }
+  if (id === 'emailcomposer') { if (!allCases.length) loadAll().then(updateRecipientCount); loadEmailLog(); updateEmailPreview(); updateRecipientCount(); }
   if (id === 'inbox') loadInbox();
   if (id === 'history')   loadHistory();
   if (id === 'reports')   { renderReportList(); if (!allCases.length) loadAll().then(refreshReportPreview); else refreshReportPreview(); }
@@ -1642,6 +1647,34 @@ function setRecipient(btn, val) {
   wrap.style.display = val === 'specific' ? 'block' : 'none';
   const toText = val==='all'?'All registered patients (from confirmed cases)':val==='highrisk'?'High-risk barangay patients':document.getElementById('email-brgy-target')?.value||'Selected barangay';
   document.getElementById('preview-to').textContent = toText;
+  updateRecipientCount();
+}
+
+// Returns the case pool for the currently selected Recipients scope,
+// honoring the "Confirmed cases only" checkbox — shared by the live
+// count and the actual send, so they can never disagree.
+function getTargetCasePool() {
+  const targetBrgy = currentRecipient === 'specific' ? document.getElementById('email-brgy-target')?.value : null;
+  let pool = allCases.filter(c => c.patient_contact && c.patient_contact.trim() !== '');
+  if (document.getElementById('confirmed-only-toggle')?.checked) {
+    pool = pool.filter(c => c.status === 'Confirmed');
+  }
+  if (currentRecipient === 'specific' && targetBrgy) {
+    pool = pool.filter(c => c.barangay === targetBrgy);
+  } else if (currentRecipient === 'highrisk') {
+    const highBrgys = riskData.filter(r=>r.risk==='High').map(r=>r.barangay);
+    pool = pool.filter(c => highBrgys.includes(c.barangay));
+  }
+  return pool;
+}
+
+function updateRecipientCount() {
+  const el = document.getElementById('rhu-recipient-count');
+  if (!el) return;
+  const pool = getTargetCasePool();
+  const unique = new Set(pool.map(c => c.patient_contact.trim()));
+  el.textContent = `${unique.size} patient number${unique.size !== 1 ? 's' : ''} will receive this SMS (plus any matching BHW accounts)`;
+  el.style.color = unique.size > 0 ? 'var(--safe)' : 'var(--muted)';
 }
 
 function updateEmailPreview() {
@@ -1670,14 +1703,9 @@ async function sendEmail() {
 
   let targetBrgy = currentRecipient === 'specific' ? document.getElementById('email-brgy-target').value : null;
 
-  // ── Build patient recipients from submitted cases ──────────
-  let caseRecipients = allCases.filter(c => c.patient_contact && c.patient_contact.trim() !== '');
-  if (currentRecipient === 'specific' && targetBrgy) {
-    caseRecipients = caseRecipients.filter(c => c.barangay === targetBrgy);
-  } else if (currentRecipient === 'highrisk') {
-    const highBrgys = riskData.filter(r=>r.risk==='High').map(r=>r.barangay);
-    caseRecipients = caseRecipients.filter(c => highBrgys.includes(c.barangay));
-  }
+  // ── Build patient recipients from submitted cases (respects the
+  //    Confirmed-cases-only toggle — same pool the live count shows) ──
+  let caseRecipients = getTargetCasePool();
 
   // ── Also include BHW/barangay accounts from USERS list ────
   const bhwRecipients = USERS
@@ -1716,10 +1744,10 @@ async function sendEmail() {
 
   if (result.demo) {
     showToast(`⚠ SMS server offline — ${unique.length} recipient${unique.length!==1?'s':''} logged locally. Start server/server.js to send real SMS.`, true);
-  } else if (result.success) {
+  } else if (result.success && sentCount > 0) {
     showToast(`✅ Delivered to ${sentCount} of ${unique.length} recipient${unique.length!==1?'s':''}.`);
   } else {
-    showToast(`⚠ Send failed: ${result.error || 'Unknown error. Check the SMS server.'}`, true);
+    showToast(`⚠ Send failed: ${result.error || 'No messages were delivered. Check the SMS server.'}`, true);
   }
 
   emailLogs = [{ type, subject, recipient_count: sentCount, barangay: targetBrgy||currentRecipient, sent_at: new Date().toISOString() }, ...emailLogs];
@@ -1751,6 +1779,7 @@ async function quickAlert(brgy) {
   document.getElementById('email-brgy-target').value = brgy;
   document.getElementById('email-type').value = 'warning';
   updateEmailPreview();
+  updateRecipientCount();
   showToast(`⚠ Composing outbreak warning for ${brgy}...`);
 }
 
