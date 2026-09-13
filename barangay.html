@@ -1287,7 +1287,10 @@ async function submitCase() {
     // Send confirmation SMS to patient if mobile number provided
     if (contact) {
       const msg = `Dear ${name}, your dengue case report has been submitted to the Janiuay RHU for review.\nSeverity: ${selectedSeverity}\nSymptoms: ${symptoms.join(', ')}\nOnset: ${onset}\nPlease rest and stay hydrated. RHU will contact you if follow-up is needed. -Janiuay Dengue Alert System`;
-      await SMS.send(contact, name, '', msg, 'case-confirmation', user?.id, BRGY);
+      const smsResult = await SMS.send(contact, name, '', msg, 'case-confirmation', user?.id, BRGY);
+      if (!smsResult.success || smsResult.demo) {
+        showToast(`⚠ Case submitted, but confirmation SMS to patient failed: ${smsResult.error || 'server offline'}`, true);
+      }
     }
 
     // Reset form
@@ -1789,7 +1792,13 @@ async function sendBrgyAdvisory() {
     sentBy: user?.id
   });
 
-  showToast(`✅ Advisory sent to ${sentCount} patient${sentCount !== 1 ? 's' : ''} in Barangay ${BRGY}!`);
+  if (results.demo) {
+    showToast(`⚠ SMS server was offline/waking up — nothing was actually sent. Please wait a moment and try again.`, true);
+  } else if (results.success && sentCount > 0) {
+    showToast(`✅ Advisory sent to ${sentCount} patient${sentCount !== 1 ? 's' : ''} in Barangay ${BRGY}!`);
+  } else {
+    showToast(`⚠ Send failed: ${results.error || 'No messages were delivered. Check the SMS server.'}`, true);
+  }
 
   // Reset form
   document.getElementById('brgy-email-subject').value = '';
