@@ -1,0 +1,91 @@
+// ============================================================
+//  DENGUE ALERT SYSTEM — Firestore Security Rules
+//  Municipality of Janiuay, Iloilo
+//
+//  HOW TO DEPLOY:
+//  Firebase Console → Firestore Database → Rules tab → paste this
+//  entire file → Publish.
+//  (Or, with the Firebase CLI: `firebase deploy --only firestore:rules`)
+//
+//  These rules assume users sign in via the custom token minted by
+//  server/server.js's /login endpoint, which sets `role`, `barangay`,
+//  and `name` as custom claims on request.auth.token. Anonymous
+//  (unauthenticated) requests get NO access to any collection below.
+// ============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function role()       { return isSignedIn() ? request.auth.token.role : null; }
+    function isRhu()      { return role() == 'rhu' || role() == 'admin'; }
+    function isBhw()      { return role() == 'bhw'; }
+
+    // RHU/admin login accounts — never touched by the browser directly.
+    // Only server.js (Firebase Admin SDK) reads/writes this collection;
+    // Admin SDK calls bypass these rules entirely, so "false" here just
+    // blocks any client from reading admin credentials.
+    match /admin/{docId} {
+      allow read, write: if false;
+    }
+
+    // BHW registration accounts. Registration and password reset go
+    // through server.js (Admin SDK, bypasses these rules). RHU staff
+    // manage (approve/reject/revoke) accounts directly from rhu.html
+    // using their authenticated session.
+    match /bhw_accounts/{docId} {
+      allow read, write: if isRhu();
+      allow read: if isSignedIn() && request.auth.uid == docId;
+    }
+
+    // Dengue case records — contains patient PII. RHU can read every
+    // case; a BHW/barangay account can only read cases tagged with its
+    // own barangay (enforced here, not just filtered in the UI — any
+    // query a barangay account issues must itself be constrained with
+    // a matching `.where('barangay','==', ...)`, e.g. getBarangayCases(),
+    // or Firestore rejects the whole query rather than leaking rows).
+    match /dengue_cases/{docId} {
+      allow read: if isRhu() || (isBhw() && resource.data.barangay == request.auth.token.barangay);
+      allow create: if isBhw() || isRhu();
+      allow update: if isRhu();
+      allow delete: if isRhu();
+    }
+
+    // SMS send logs — RHU can read the audit trail; either role can
+    // append a log entry when they trigger a send.
+    match /sms_logs/{docId} {
+      allow read: if isRhu();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // BHW → RHU messages. A BHW can send and read their own barangay's
+    // thread; RHU can read/update (mark read, add a note) every thread.
+    match /rhu_messages/{docId} {
+      allow read: if isRhu() || (isBhw() && resource.data.barangay == request.auth.token.barangay);
+      allow create: if isBhw() || isRhu();
+      allow update: if isRhu();
+      allow delete: if false;
+    }
+
+    // Field interventions (fogging, cleanups, etc.)
+    match /interventions/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isRhu();
+    }
+
+    // `users` and `email_logs` aren't read or written anywhere in the
+    // current app (checked index.html, barangay.html, rhu.html,
+    // config.js, server.js) — leftover from an earlier version. Locked
+    // down rather than deleted, in case old data still needs auditing.
+    match /users/{docId}       { allow read, write: if false; }
+    match /email_logs/{docId}  { allow read, write: if false; }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

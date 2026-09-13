@@ -1,0 +1,24 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "server/**",
+      "database/**",
+      "*.md",
+      "Dockerfile",
+      ".dockerignore",
+      "package-lock.json",
+      "start-server.bat"
+    ],
+    "rewrites": [],
+    "headers": [
+      {
+        "source": "**/*.@(html)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ]
+  }
+}

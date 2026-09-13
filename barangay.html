@@ -1,0 +1,2546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dengue Alert — Barangay Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1f2937; --border: #2d3748;
+    --text: #e2e8f0; --muted: #718096; --accent: #f56565; --accent2: #fc8181;
+    --warn: #ed8936; --safe: #48bb78; --info: #63b3ed; --yellow: #ecc94b;
+    --critical-bg: rgba(245,101,101,0.12); --warn-bg: rgba(237,137,54,0.12);
+    --safe-bg: rgba(72,187,120,0.12); --info-bg: rgba(99,179,237,0.12);
+    --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 14px; line-height: 1.6; display: flex; height: 100vh; overflow: hidden;
+  }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: 240px; min-width: 240px; background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+  .logo-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600; color: var(--info); }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+  .nav-section { padding: 12px 12px 0; }
+  .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 8px; margin-bottom: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 500; transition: all 0.15s; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--info-bg); color: var(--info); }
+  .nav-item .icon { font-size: 16px; min-width: 18px; text-align: center; }
+  .badge { margin-left: auto; background: var(--accent); color: white; border-radius: 99px; font-size: 10px; font-weight: 700; padding: 1px 6px; min-width: 18px; text-align: center; }
+  .badge.info { background: var(--info); }
+  .sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
+  .user-chip { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--info), var(--safe)); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+  .user-info .name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .user-info .role { font-size: 11px; color: var(--muted); }
+  .logout-btn { margin-top: 10px; width: 100%; padding: 7px; border-radius: 7px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 12px; transition: all 0.15s; }
+  .logout-btn:hover { background: var(--surface2); color: var(--text); }
+
+  /* ===== MAIN ===== */
+  .main { flex: 1; overflow-y: auto; display: none; flex-direction: column; }
+  .main.active { display: flex; }
+  .top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; position: sticky; top: 0; z-index: 10; }
+  .page-title { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; color: var(--text); }
+  .page-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .top-actions { display: flex; gap: 8px; }
+  .btn { padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+  .btn-primary { background: var(--info); color: #0c1a2e; }
+  .btn-primary:hover { background: #90cdf4; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); background: var(--surface2); }
+  .btn-safe { background: var(--safe); color: #064e3b; }
+  .btn-danger { background: var(--accent); color: white; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .content { padding: 24px; flex: 1; }
+  .two-col { display: grid; grid-template-columns: 1fr 380px; gap: 16px; margin-bottom: 16px; }
+  .backup-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media(max-width: 900px) { .backup-steps { grid-template-columns: 1fr; } }
+  .full-col { margin-bottom: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .card-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .card-body { padding: 18px; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .stat-label { font-size: 11.5px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-value { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 600; margin: 4px 0 2px; line-height: 1; }
+  .stat-change { font-size: 11px; color: var(--muted); }
+  .stat-card.critical .stat-value { color: var(--accent); }
+  .stat-card.warn .stat-value { color: var(--warn); }
+  .stat-card.safe .stat-value { color: var(--safe); }
+  .stat-card.info .stat-value { color: var(--info); }
+
+  /* Risk banner */
+  .risk-banner { border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .risk-banner.high { background: linear-gradient(135deg, rgba(245,101,101,0.18), rgba(237,137,54,0.1)); border: 1px solid rgba(245,101,101,0.4); animation: pulse-border 2s ease infinite; }
+  .risk-banner.medium { background: linear-gradient(135deg, rgba(237,137,54,0.15), transparent); border: 1px solid rgba(237,137,54,0.4); }
+  .risk-banner.low { background: var(--safe-bg); border: 1px solid rgba(72,187,120,0.3); }
+  @keyframes pulse-border { 0%,100%{border-color:rgba(245,101,101,0.4)} 50%{border-color:rgba(245,101,101,0.8)} }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  tbody tr { border-bottom: 1px solid rgba(45,55,72,0.5); transition: background 0.1s; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 11px 14px; font-size: 13px; }
+  tbody tr:last-child { border-bottom: none; }
+
+  /* Chips */
+  .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
+  .chip.high { background: var(--critical-bg); color: var(--accent); border: 1px solid rgba(245,101,101,0.3); }
+  .chip.medium { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(237,137,54,0.3); }
+  .chip.low { background: var(--safe-bg); color: var(--safe); border: 1px solid rgba(72,187,120,0.3); }
+  .chip.info-chip { background: var(--info-bg); color: var(--info); border: 1px solid rgba(99,179,237,0.3); }
+  .chip.pending { background: rgba(236,201,75,0.12); color: var(--yellow); border: 1px solid rgba(236,201,75,0.3); }
+
+  /* Form */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-full { grid-column: 1 / -1; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.03em; }
+  .form-input { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; transition: border-color 0.15s; outline: none; width: 100%; color-scheme: dark; }
+  .form-input:focus { border-color: var(--info); }
+  body.light-mode .form-input { color-scheme: light; }
+  .form-input option { background: var(--surface2); }
+  textarea.form-input { resize: vertical; min-height: 80px; }
+  .required { color: var(--accent); }
+  .rec-tab{padding:5px 14px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted);transition:all .15s;font-family:'DM Sans',sans-serif}
+  .rec-tab.active{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+  .rec-tab:hover{background:var(--surface2);color:var(--text)}
+
+  /* ===== COMPACT ONE-SCREEN CASE REPORT FORM (no scrolling needed) ===== */
+  #page-report .content{ max-width:1060px; padding-top:14px; padding-bottom:14px; }
+  #page-report .top-bar{ padding:10px 24px; }
+  #page-report .card-header{ padding:10px 18px; }
+  #page-report .card-body{ padding:14px 18px 16px; }
+  #case-form{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; }
+  #case-form .form-group{ gap:4px; }
+  #case-form .form-label{ font-size:11.5px; }
+  #case-form .form-input{ padding:7px 10px; font-size:12.5px; }
+  #case-form .form-span2{ grid-column:span 2; }
+  #case-form .form-full{ grid-column:1 / -1; }
+  #case-form .field-hint{ font-size:10.5px; }
+  #case-form .mini-banner{ border-radius:7px; padding:7px 10px; font-size:11px; display:flex; align-items:center; gap:6px; line-height:1.35; }
+  #case-form .symptoms-row .form-label{ margin-bottom:2px; display:block; }
+  #case-form .checkbox-grid{ grid-template-columns:repeat(5,1fr); gap:5px; }
+  #case-form .checkbox-item{ padding:5px 8px; font-size:11px; gap:6px; }
+  #case-form .notes-split{ display:grid; grid-template-columns:1.5fr 1fr; gap:12px; align-items:stretch; }
+  #case-form .notes-split .form-group{ height:100%; }
+  #case-form textarea.form-input{ min-height:46px; resize:none; flex:1; }
+  #case-form .banner-stack{ display:flex; flex-direction:column; gap:6px; }
+  #case-form #submit-btn{ padding:9px !important; font-size:13px !important; }
+  @media(max-width:1180px){
+    #case-form{ grid-template-columns:repeat(2,1fr); }
+    #case-form .form-span2{ grid-column:span 2; }
+    #case-form .checkbox-grid{ grid-template-columns:repeat(3,1fr); }
+    #case-form .notes-split{ grid-template-columns:1fr; }
+  }
+  @media(max-width:768px){
+    #case-form{ grid-template-columns:1fr; }
+    #case-form .form-span2{ grid-column:1; }
+    #case-form .checkbox-grid{ grid-template-columns:1fr 1fr; }
+  }
+
+  /* Severity */
+  .severity-btns { display: flex; gap: 8px; }
+  .sev-btn { flex: 1; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted); transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+  .sev-btn:hover { background: var(--surface2); color: var(--text); }
+  .sev-btn.active-mild { background: var(--safe-bg); color: var(--safe); border-color: var(--safe); }
+  .sev-btn.active-moderate { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  .sev-btn.active-severe { background: var(--critical-bg); color: var(--accent); border-color: var(--accent); }
+
+  /* Checkbox symptoms */
+  .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .checkbox-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 12.5px; transition: all 0.15s; }
+  .checkbox-item:hover { border-color: var(--info); }
+  .checkbox-item input { accent-color: var(--info); }
+
+  /* Alert feed */
+  .alert-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(45,55,72,0.5); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .alert-dot.high { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .alert-dot.medium { background: var(--warn); }
+  .alert-dot.low { background: var(--safe); }
+  .alert-msg { font-size: 12.5px; color: var(--text); line-height: 1.4; }
+  .alert-time { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'DM Mono', monospace; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; z-index: 9999; max-width: 340px; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Loading state */
+  .loading-overlay { position: absolute; inset: 0; background: rgba(13,17,23,0.7); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); z-index: 5; }
+  .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--info); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+
+  /* ── LIGHT MODE ─────────────────────────────────────────── */
+  body.light-mode {
+    --bg:#f0f4f8;--surface:#ffffff;--surface2:#e8edf3;--border:#cbd5e0;
+    --text:#1a202c;--muted:#718096;--accent:#e53e3e;--accent2:#fc8181;
+    --warn:#dd6b20;--safe:#276749;--info:#2b6cb0;--yellow:#b7791f;
+    --critical-bg:rgba(229,62,62,0.08);--warn-bg:rgba(221,107,32,0.08);
+    --safe-bg:rgba(39,103,73,0.08);--info-bg:rgba(43,108,176,0.08);
+    --shadow:0 4px 24px rgba(0,0,0,0.1);
+  }
+
+  /* ── HAMBURGER / MOBILE NAV ─────────────────────────────── */
+  .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+  .hamburger span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:all .25s}
+  .hamburger.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+  .hamburger.open span:nth-child(2){opacity:0}
+  .hamburger.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:149;backdrop-filter:blur(2px)}
+  .sidebar-overlay.open{display:block}
+
+  @media (max-width: 1100px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    #page-emails .content { grid-template-columns: 1fr !important; }
+    #page-messages > div:last-child { grid-template-columns: 1fr !important; }
+    #report-type-grid { grid-template-columns: 1fr !important; }
+  }
+  @media(max-width:768px){
+    .hamburger{display:flex}
+    .sidebar{position:fixed;left:-260px;top:0;height:100vh;z-index:150;transition:left .25s ease;box-shadow:4px 0 20px rgba(0,0,0,0.4)}
+    .sidebar.mobile-open{left:0}
+    body{display:block;overflow:auto}
+    .main{height:auto;min-height:100vh;display:none;flex-direction:column}
+    .main.active{display:flex}
+    .top-bar{padding:12px 16px 12px 60px}
+    .content{padding:16px}
+    .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+    .two-col{grid-template-columns:1fr;gap:12px}
+    .modal-card{width:95%;padding:18px}
+    .top-actions{gap:6px}
+    .top-actions .btn{padding:6px 10px;font-size:11.5px}
+    .toast{bottom:16px;right:16px;left:16px;max-width:none}
+    .checkbox-grid{grid-template-columns:1fr}
+    .severity-btns{flex-direction:column}
+    #page-messages > div:last-child { grid-template-columns: 1fr !important; height:auto !important; overflow:visible !important; }
+    #page-messages { overflow-y:auto !important; height:auto !important; }
+  }
+  @media(max-width:480px){
+    .stats-grid{grid-template-columns:1fr}
+    .page-title{font-size:17px}
+    .stat-value{font-size:26px}
+    table{font-size:12px}
+    thead th,tbody td{padding:8px 10px}
+  }
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-title">🏘️ Barangay Portal</div>
+    <div class="logo-sub" id="sidebar-brgy">Loading...</div>
+  </div>
+
+  <div class="nav-section" style="margin-top:8px">
+    <div class="nav-label">Dashboard</div>
+    <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="2" width="4" height="18" rx="1"/></svg></span> My Dashboard
+    </div>
+    <div class="nav-item" data-page="alerts" onclick="showPage('alerts')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></span> Alerts
+      <span class="badge info" id="alert-badge" style="display:none">0</span>
+    </div>
+  </div>
+
+  <div class="nav-section" style="margin-top:4px">
+    <div class="nav-label">Case Management</div>
+    <div class="nav-item" data-page="report" onclick="showPage('report')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="4" width="13" height="17" rx="1.6"/><rect x="8.7" y="2.5" width="6.6" height="3" rx="1" fill="currentColor" stroke="none"/><path d="M8.5 12.5 10.7 14.7 15.5 9.5"/></svg></span> Submit Case
+    </div>
+    <div class="nav-item" data-page="history" onclick="showPage('history')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 8.5A8 8 0 1 1 4 13"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4.5l3 2"/></svg></span> Case History
+    </div>
+    <div class="nav-item" data-page="backup" onclick="showPage('backup')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 19 5.5v6c0 5.6-4 8.4-7 9.5-3-1.1-7-3.9-7-9.5v-6L12 2.5z"/><path d="M8.7 11.7 11 14l4.3-5"/></svg></span> Backup &amp; Recovery
+    </div>
+  </div>
+
+  <div class="nav-section" style="margin-top:4px">
+    <div class="nav-label">Communication</div>
+    <div class="nav-item" data-page="messages" onclick="showPage('messages')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/></svg></span> Message RHU
+      <span class="badge info" id="msg-badge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" data-page="emails" onclick="showPage('emails')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></span> Send Advisory
+    </div>
+  </div>
+
+  <div class="nav-section" style="margin-top:4px">
+    <div class="nav-label">Admin</div>
+    <div class="nav-item" data-page="reports" onclick="showPage('reports')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v11a1.5 1.5 0 0 1-1.5 1.5h-10.5a1.5 1.5 0 0 1-1.5-1.5V4.5A1.5 1.5 0 0 1 7 3z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16h7M8.5 19h4"/></svg></span> Auto Reports
+    </div>
+    <div class="nav-item" data-page="settings" onclick="showPage('settings')">
+      <span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.6M7.1 15.3l-1.5 1.6M18.4 18.4l-1.5-1.6M7.1 8.7 5.6 7.1"/></svg></span> Settings
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="avatar" id="sidebar-avatar">BH</div>
+      <div class="user-info">
+        <div class="name" id="sidebar-name">Loading...</div>
+        <div class="role">Barangay Health Worker</div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="SESSION.logout()">← Log Out</button>
+  </div>
+</nav>
+
+<!-- ===================== PAGE: DASHBOARD ===================== -->
+<div class="main active" id="page-dashboard">
+  <div class="top-bar">
+    <div>
+      <div class="page-title" id="dash-title">My Barangay Dashboard</div>
+      <div class="page-sub" id="dash-sub">Dengue monitoring for your barangay</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-secondary" onclick="loadDashboard()">↺ Refresh</button>
+      <button class="btn btn-primary" onclick="showPage('report')">+ Submit Case</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Risk Banner -->
+    <div class="risk-banner low" id="risk-banner">
+      <div style="font-size:22px">✅</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--safe)" id="risk-level-text">LOW RISK — No outbreak threshold reached</div>
+        <div style="font-size:13px;color:var(--text)" id="risk-desc">Your barangay has no confirmed cases in the last 14 days.</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card critical">
+        <div class="stat-label">Total Cases</div>
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-change">All time</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="stat-label">Last 14 Days</div>
+        <div class="stat-value" id="stat-14d">—</div>
+        <div class="stat-change">Threshold: 5 cases</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-label">Pending Review</div>
+        <div class="stat-value" id="stat-pending">—</div>
+        <div class="stat-change">Awaiting RHU</div>
+      </div>
+      <div class="stat-card safe">
+        <div class="stat-label">Confirmed</div>
+        <div class="stat-value" id="stat-confirmed">—</div>
+        <div class="stat-change">By RHU</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <!-- Recent cases -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Recent Cases</div>
+            <div class="card-sub">Latest submissions from your barangay</div>
+          </div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="showPage('history')">View All →</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Age</th>
+                <th>Onset</th>
+                <th>Severity</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="recent-cases-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Alerts panel -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Notifications from RHU</div>
+          <div class="card-sub">Latest advisories</div>
+        </div>
+        <div class="card-body" style="max-height:360px;overflow-y:auto" id="alerts-feed">
+          <div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></div>No alerts yet</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== PAGE: SUBMIT CASE ===================== -->
+<div class="main" id="page-report">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Submit Dengue Case</div>
+      <div class="page-sub">Report a new dengue case to the RHU for confirmation</div>
+    </div>
+  </div>
+  <div class="content" style="margin:0 auto">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📋 New Case Report</div>
+          <div class="card-sub">All fields marked <span class="required">*</span> are required</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="form-grid" id="case-form">
+
+          <div class="form-group">
+            <label class="form-label">Patient Full Name <span class="required">*</span></label>
+            <input type="text" class="form-input" id="f-name" placeholder="Juan dela Cruz">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Age <span class="required">*</span></label>
+            <input type="number" class="form-input" id="f-age" placeholder="25" min="0" max="120">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Sex <span class="required">*</span></label>
+            <select class="form-input" id="f-sex">
+              <option value="">Select...</option>
+              <option>Male</option>
+              <option>Female</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Date of Symptom Onset <span class="required">*</span></label>
+            <input type="date" class="form-input" id="f-onset">
+          </div>
+
+          <div class="form-group form-span2">
+            <label class="form-label">Patient Address / Purok</label>
+            <input type="text" class="form-input" id="f-address" placeholder="Purok 3, Poblacion">
+          </div>
+
+          <div class="form-group form-span2">
+            <label class="form-label">Patient Mobile Number <span class="field-hint" style="color:var(--muted);font-weight:400">(optional, for SMS advisories)</span></label>
+            <input type="tel" class="form-input" id="f-contact" placeholder="09171234567" pattern="(09|\+639)\d{9}" maxlength="13">
+          </div>
+
+          <div class="form-group form-full symptoms-row">
+            <label class="form-label">Symptoms Present <span class="required">*</span></label>
+            <div class="checkbox-grid">
+              <label class="checkbox-item"><input type="checkbox" value="Fever"> Fever (≥38°C)</label>
+              <label class="checkbox-item"><input type="checkbox" value="Rash"> Skin Rash</label>
+              <label class="checkbox-item"><input type="checkbox" value="Headache"> Severe Headache</label>
+              <label class="checkbox-item"><input type="checkbox" value="Body Aches"> Body Aches / Myalgia</label>
+              <label class="checkbox-item"><input type="checkbox" value="Joint Aches"> Joint Pain / Arthralgia</label>
+              <label class="checkbox-item"><input type="checkbox" value="Vomiting"> Nausea / Vomiting</label>
+              <label class="checkbox-item"><input type="checkbox" value="Nosebleed"> Nosebleed / Bleeding</label>
+              <label class="checkbox-item"><input type="checkbox" value="Abdominal Pain"> Abdominal Pain</label>
+              <label class="checkbox-item"><input type="checkbox" value="Eye Pain"> Eye Pain (Retro-orbital)</label>
+              <label class="checkbox-item"><input type="checkbox" value="Fatigue"> Extreme Fatigue</label>
+            </div>
+          </div>
+
+          <div class="form-group form-full">
+            <div class="notes-split">
+              <div class="form-group">
+                <label class="form-label">Additional Notes</label>
+                <textarea class="form-input" id="f-notes" placeholder="Any other relevant information, referral details, etc."></textarea>
+              </div>
+              <div class="banner-stack">
+                <div class="mini-banner" style="background:var(--warn-bg);border:1px solid rgba(237,201,74,0.3);color:var(--warn)">
+                  ⚕️ <span><strong>Severity</strong> will be assessed by the RHU after review.</span>
+                </div>
+                <div class="mini-banner" style="background:var(--info-bg);border:1px solid rgba(99,179,237,0.3);color:var(--muted)">
+                  ℹ️ <span>Sent to RHU for confirmation; patient gets an auto SMS if a mobile number is provided.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group form-full" style="margin-top:2px">
+            <button class="btn btn-primary" style="padding:12px;width:100%;font-size:14px" id="submit-btn" onclick="submitCase()">
+              📤 Submit Case to RHU
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE: CASE HISTORY ===================== -->
+<div class="main" id="page-history">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Case History</div>
+      <div class="page-sub" id="history-sub">All dengue cases from your barangay</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-ghost" style="font-size:12px" onclick="exportCSV()">↓ Export CSV</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-header">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" class="form-input" style="width:200px;padding:6px 10px;font-size:12px" placeholder="Search patient or address..." id="search-input" oninput="filterCases()">
+          <select class="form-input" style="width:140px;padding:6px 10px;font-size:12px" id="status-filter" onchange="filterCases()">
+            <option value="">All Status</option>
+            <option>Pending</option>
+            <option>Confirmed</option>
+            <option>Rejected</option>
+            <option>Recovered</option>
+            <option>Hospitalized</option>
+          </select>
+          <select class="form-input" style="width:130px;padding:6px 10px;font-size:12px" id="severity-filter" onchange="filterCases()">
+            <option value="">All Severity</option>
+            <option>Mild</option>
+            <option>Moderate</option>
+            <option>Severe</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>Age/Sex</th>
+              <th>Onset Date</th>
+              <th>Severity</th>
+              <th>Status</th>
+              <th>Reported</th>
+              <th>RHU Notes</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE: BACKUP & RECOVERY ===================== -->
+<div class="main" id="page-backup">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Backup &amp; Recovery</div>
+      <div class="page-sub">Paper + CSV fallback for power outages or when the system/server is down</div>
+    </div>
+  </div>
+  <div class="content" style="max-width:920px;margin:0 auto">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body" style="display:flex;gap:14px;align-items:flex-start;background:var(--info-bg);border-radius:var(--radius)">
+        <div style="font-size:22px">🔌</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--info);margin-bottom:3px">When there's a blackout or the server/system is down</div>
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.6">
+            Don't stop recording. <strong>Step 1:</strong> write cases on the printable paper form below while there's no power or connection.
+            <strong>Step 2:</strong> once the system is back online, type those paper records into the CSV template and import them all at once —
+            no need to re-encode each case one by one through the form.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="backup-steps">
+
+      <!-- Step 1: Paper -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">📝 Step 1 — Paper Form (offline)</div>
+            <div class="card-sub">Print copies ahead of time and keep them at the barangay hall</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+            A blank, printable version of the case report — same fields as the online form. Use this by hand
+            when there's no electricity or internet, then encode it later using Step 2.
+          </div>
+          <button class="btn btn-secondary" style="width:100%" onclick="downloadPaperFormPDF()">🖨️ Download Blank Paper Form (PDF)</button>
+        </div>
+      </div>
+
+      <!-- Step 2: CSV -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">📥 Step 2 — Bulk Import via CSV</div>
+            <div class="card-sub">Once power/system is restored</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+            Download the template, fill in one row per paper record (in Excel, Sheets, or Notepad), then upload it here to submit
+            all cases to the RHU in one go.
+          </div>
+          <button class="btn btn-secondary" style="width:100%;margin-bottom:8px" onclick="downloadCSVTemplate()">⬇ Download CSV Template</button>
+          <label class="btn btn-primary" style="width:100%;display:flex;align-items:center;justify-content:center;cursor:pointer">
+            📤 Choose CSV File to Import
+            <input type="file" accept=".csv,text/csv" id="csv-file-input" style="display:none" onchange="handleCSVFile(event)">
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview / Import results -->
+    <div class="card" id="csv-preview-card" style="margin-top:16px;display:none">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Preview Before Import</div>
+          <div class="card-sub" id="csv-preview-sub">Review rows below — invalid rows will be skipped</div>
+        </div>
+        <button class="btn btn-primary" id="csv-import-btn" onclick="importAllValidRows()">Import Valid Rows →</button>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap" style="max-height:340px;overflow-y:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Patient</th><th>Age</th><th>Sex</th><th>Onset</th><th>Symptoms</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="csv-preview-tbody"></tbody>
+          </table>
+        </div>
+        <div id="csv-import-progress" style="font-size:12px;color:var(--muted);margin-top:12px;display:none"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-body" style="display:flex;gap:14px;align-items:flex-start">
+        <div style="font-size:20px">💡</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6">
+          <strong style="color:var(--text)">Tip:</strong> This works whether the app is connected to the online database or running in local offline mode —
+          cases you import here are added the same way as ones submitted through the regular form. You can also use
+          <strong style="color:var(--text)">Case History → Export CSV</strong> anytime to keep an up-to-date backup copy of everything already recorded.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== PAGE: ALERTS ===================== -->
+<div class="main" id="page-alerts">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Alerts & Advisories</div>
+      <div class="page-sub">Notifications and warnings from the RHU</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Recent Alerts</div>
+        <div class="card-sub">Messages from the Rural Health Unit</div>
+      </div>
+      <div class="card-body" id="all-alerts-feed">
+        <div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></div>No alerts yet. Stay safe!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE: SEND ADVISORY ===================== -->
+<div class="main" id="page-emails">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Send Advisory</div>
+      <div class="page-sub">SMS dengue advisories to patients in your barangay</div>
+    </div>
+    <div class="top-actions">
+      <div id="brgy-smtp-status" style="font-size:12px;color:var(--muted);padding:4px 10px;border-radius:6px;background:var(--surface2)">Checking SMS server...</div>
+    </div>
+  </div>
+  <div class="content" style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">
+
+    <!-- LEFT: Composer -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Compose Advisory</div>
+        <div class="card-sub">Send a dengue advisory SMS to patients in Barangay <span id="composer-brgy-name">—</span></div>
+      </div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label class="form-label">Recipients</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" id="brgy-recip-tabs">
+            <button class="rec-tab active" onclick="setBrgyRecipient(this,'all')">All Patients</button>
+            <button class="rec-tab" onclick="setBrgyRecipient(this,'confirmed')">Confirmed Cases Only</button>
+          </div>
+          <div id="brgy-recipient-count" style="font-size:12px;color:var(--muted);margin-top:4px">Loading patient mobile numbers...</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Advisory Type</label>
+          <select class="form-input" id="brgy-email-type">
+            <option value="prevention">📋 Prevention Advisory</option>
+            <option value="warning">⚠️ Dengue Warning</option>
+            <option value="fogging">💨 Fogging Notice</option>
+            <option value="education">📚 Health Bulletin</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Subject <span class="required">*</span></label>
+          <input type="text" class="form-input" id="brgy-email-subject" placeholder="e.g. Dengue Prevention Reminder — Barangay Jibolo" oninput="updateBrgyPreview()">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Message <span class="required">*</span></label>
+          <textarea class="form-input" id="brgy-email-body" rows="7"
+            placeholder="Type your advisory message here..." oninput="updateBrgyPreview()"
+            style="min-height:160px"></textarea>
+        </div>
+
+        <div style="background:var(--info-bg);border:1px solid rgba(99,179,237,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:14px">
+          ℹ️ Only patients whose mobile number was recorded when their case was submitted will receive this SMS.
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px" id="brgy-send-btn" onclick="sendBrgyAdvisory()">
+          📤 Send Advisory
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Preview + Log -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- Quick templates -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Quick Templates</div></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-secondary" style="font-size:12px;text-align:left;padding:8px 12px" onclick="applyBrgyTemplate('prevention')">
+            📋 Prevention Reminders
+          </button>
+          <button class="btn btn-secondary" style="font-size:12px;text-align:left;padding:8px 12px" onclick="applyBrgyTemplate('warning')">
+            ⚠️ Dengue Warning
+          </button>
+          <button class="btn btn-secondary" style="font-size:12px;text-align:left;padding:8px 12px" onclick="applyBrgyTemplate('fogging')">
+            💨 Scheduled Fogging
+          </button>
+          <button class="btn btn-secondary" style="font-size:12px;text-align:left;padding:8px 12px" onclick="applyBrgyTemplate('cleanup')">
+            🧹 Clean-up Drive Notice
+          </button>
+        </div>
+      </div>
+
+      <!-- Sent log -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-header" style="padding:14px 18px 12px">
+          <div class="card-title">Sent Log</div>
+          <div class="card-sub">Recent advisories from your barangay</div>
+        </div>
+        <div id="brgy-email-log" style="max-height:300px;overflow-y:auto">
+          <div class="empty-state" style="padding:30px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></div>No advisories sent yet.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE: MESSAGE RHU ===================== -->
+<div class="main" id="page-messages" style="overflow:hidden">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Message RHU</div>
+      <div class="page-sub">Send updates, fogging reports, concerns &amp; requests to the RHU</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-ghost" style="font-size:12px" onclick="loadMessages()">↺ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Single-screen grid: compose left, sent log right -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px;flex:1;min-height:0;overflow:hidden">
+
+    <!-- LEFT: Compose (fixed height, no vertical scroll on the panel itself) -->
+    <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="card-header" style="flex-shrink:0">
+        <div class="card-title">📨 New Message</div>
+        <div class="card-sub">All RHU officers will see this message</div>
+      </div>
+      <div class="card-body" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px">
+
+        <!-- Type tabs (compact horizontal scroll) -->
+        <div>
+          <div class="form-label" style="margin-bottom:6px">Message Type</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="msg-type-tabs">
+            <button class="rec-tab active" onclick="setMsgType(this,'update')"   data-type="update">📋 Update</button>
+            <button class="rec-tab" onclick="setMsgType(this,'fogging')"  data-type="fogging">💨 Fogging</button>
+            <button class="rec-tab" onclick="setMsgType(this,'cleanup')"  data-type="cleanup">🧹 Clean-up</button>
+            <button class="rec-tab" onclick="setMsgType(this,'concern')"  data-type="concern">⚠️ Concern</button>
+            <button class="rec-tab" onclick="setMsgType(this,'supply')"   data-type="supply">📦 Supply</button>
+          </div>
+        </div>
+
+        <!-- Priority (inline) -->
+        <div>
+          <div class="form-label" style="margin-bottom:6px">Priority</div>
+          <div style="display:flex;gap:6px">
+            <button class="sev-btn active-mild"    id="pri-normal"   onclick="setMsgPriority('normal')"   style="font-size:11.5px;flex:1">🟢 Normal</button>
+            <button class="sev-btn"                id="pri-urgent"   onclick="setMsgPriority('urgent')"   style="font-size:11.5px;flex:1">🟠 Urgent</button>
+            <button class="sev-btn"                id="pri-critical" onclick="setMsgPriority('critical')" style="font-size:11.5px;flex:1">🔴 Critical</button>
+          </div>
+        </div>
+
+        <!-- Subject -->
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Subject <span class="required">*</span></label>
+          <input type="text" class="form-input" id="msg-subject" placeholder="e.g. Fogging completed — Purok 3">
+        </div>
+
+        <!-- Quick templates row -->
+        <div>
+          <div class="form-label" style="margin-bottom:6px">Quick Templates</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('fogging_done')">💨 Fogging Completed</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('cleanup_done')">🧹 Clean-up Drive Done</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('home_visit')">🏠 Home Visit Report</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('new_cases')">📋 Suspected Cases</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('supply_request')">📦 Request Supplies</button>
+            <button class="btn btn-secondary" style="font-size:11px;padding:6px 8px;text-align:left" onclick="applyMsgTemplate('concern')">⚠️ Report Concern</button>
+          </div>
+        </div>
+
+        <!-- Message body — grows to fill remaining space -->
+        <div class="form-group" style="margin:0;flex:1;display:flex;flex-direction:column">
+          <label class="form-label">Message <span class="required">*</span></label>
+          <textarea class="form-input" id="msg-body" style="flex:1;min-height:100px;resize:none"
+            placeholder="Describe the update, intervention, concern, or request..."></textarea>
+        </div>
+
+        <!-- Send button -->
+        <button class="btn btn-primary" style="width:100%;padding:10px;font-size:13.5px;flex-shrink:0" id="send-msg-btn" onclick="sendRhuMessage()">
+          📤 Send Message to RHU
+        </button>
+
+      </div>
+    </div>
+
+    <!-- RIGHT: Sent log + what-to-report tips -->
+    <div style="display:flex;flex-direction:column;gap:14px;overflow:hidden;min-height:0">
+
+      <!-- Sent messages (scrollable, takes most of the height) -->
+      <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+        <div class="card-header" style="flex-shrink:0">
+          <div class="card-title">📬 Sent Messages</div>
+          <div class="card-sub">Messages you've sent to the RHU</div>
+        </div>
+        <div id="msg-thread" style="flex:1;overflow-y:auto;min-height:0">
+          <div class="empty-state" style="padding:32px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/></svg></div>No messages sent yet.</div>
+        </div>
+      </div>
+
+      <!-- Compact what-to-report guide -->
+      <div class="card" style="flex-shrink:0">
+        <div class="card-header" style="padding:10px 16px">
+          <div class="card-title" style="font-size:12.5px">📋 What to Report</div>
+        </div>
+        <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:11.5px;color:var(--muted);line-height:1.5">
+          <div>💨 Fogging date &amp; areas covered</div>
+          <div>🧹 Clean-up drive results</div>
+          <div>🏠 Home visit findings</div>
+          <div>⚠️ New suspected cases</div>
+          <div>📦 Larvicide / supply needs</div>
+          <div>🆘 Urgent RHU response needed</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- =================== PAGE: SETTINGS ======================= -->
+<!-- ===================== PAGE: AUTO REPORTS ===================== -->
+<div class="main" id="page-reports">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">📄 Auto Reports</div>
+      <div class="page-sub" id="reports-sub">Generate official PDF reports for your barangay</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-secondary" onclick="loadReportsPage()">↺ Refresh Data</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Report Type Cards -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px" id="report-type-grid">
+
+      <!-- Weekly Summary -->
+      <div class="card" style="cursor:pointer;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--info)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="selectReportType('weekly')">
+        <div class="card-body" style="text-align:center;padding:24px 18px">
+          <div style="font-size:36px;margin-bottom:10px">📅</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Weekly Summary</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5">7-day case count, status breakdown, severity distribution, and trend analysis</div>
+          <div style="margin-top:14px"><span class="chip info-chip">Standard Template</span></div>
+        </div>
+      </div>
+
+      <!-- Monthly Report -->
+      <div class="card" style="cursor:pointer;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--safe)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="selectReportType('monthly')">
+        <div class="card-body" style="text-align:center;padding:24px 18px">
+          <div style="font-size:36px;margin-bottom:10px">🗓️</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Monthly Report</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5">Full monthly breakdown with patient list, RHU notes, outbreak risk assessment</div>
+          <div style="margin-top:14px"><span class="chip" style="background:var(--safe-bg);color:var(--safe);border:1px solid rgba(72,187,120,0.3)">Comprehensive</span></div>
+        </div>
+      </div>
+
+      <!-- Outbreak Alert -->
+      <div class="card" style="cursor:pointer;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="selectReportType('outbreak')">
+        <div class="card-body" style="text-align:center;padding:24px 18px">
+          <div style="font-size:36px;margin-bottom:10px">🚨</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Outbreak Alert Report</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5">Emergency report when cases exceed threshold — includes recommendations</div>
+          <div style="margin-top:14px"><span class="chip high">Urgent Template</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Report Builder -->
+    <div class="card" id="report-builder" style="display:none;margin-bottom:16px">
+      <div class="card-header">
+        <div>
+          <div class="card-title" id="builder-title">📋 Configure Report</div>
+          <div class="card-sub" id="builder-sub">Set the parameters for your PDF report</div>
+        </div>
+        <button class="btn btn-ghost" style="font-size:12px" onclick="closeReportBuilder()">✕ Cancel</button>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px">
+
+          <div class="form-group">
+            <label class="form-label">Report Period — From</label>
+            <input type="date" class="form-input" id="rpt-date-from">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Report Period — To</label>
+            <input type="date" class="form-input" id="rpt-date-to">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prepared By</label>
+            <input type="text" class="form-input" id="rpt-preparer" placeholder="Name of BHW">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Include Cases</label>
+            <select class="form-input" id="rpt-status-filter">
+              <option value="all">All Cases</option>
+              <option value="Confirmed">Confirmed Only</option>
+              <option value="Pending">Pending Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Include Patient Names</label>
+            <select class="form-input" id="rpt-privacy">
+              <option value="full">Full Names</option>
+              <option value="initials">Initials Only (Privacy)</option>
+              <option value="anon">Anonymous (No Names)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Report Language</label>
+            <select class="form-input" id="rpt-lang">
+              <option value="en">English</option>
+              <option value="fil">Filipino</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Preview Stats -->
+        <div id="rpt-preview-stats" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;display:none">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">📊 Report Preview</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;text-align:center">
+            <div><div style="font-size:22px;font-weight:700;color:var(--info)" id="prev-total">0</div><div style="font-size:10px;color:var(--muted)">Total Cases</div></div>
+            <div><div style="font-size:22px;font-weight:700;color:var(--safe)" id="prev-confirmed">0</div><div style="font-size:10px;color:var(--muted)">Confirmed</div></div>
+            <div><div style="font-size:22px;font-weight:700;color:var(--yellow)" id="prev-pending">0</div><div style="font-size:10px;color:var(--muted)">Pending</div></div>
+            <div><div style="font-size:22px;font-weight:700;color:var(--accent)" id="prev-severe">0</div><div style="font-size:10px;color:var(--muted)">Severe</div></div>
+            <div><div style="font-size:22px;font-weight:700;color:var(--warn)" id="prev-risk">—</div><div style="font-size:10px;color:var(--muted)">Risk Level</div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary" onclick="previewReportStats()">🔍 Preview Stats</button>
+          <button class="btn btn-primary" id="gen-pdf-btn" onclick="generatePDF()" style="gap:6px;display:flex;align-items:center">
+            <span>⬇ Generate PDF</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Generated Reports Log -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🕒 Generated Reports Log</div>
+        <div class="card-sub">Reports generated this session</div>
+      </div>
+      <div class="card-body">
+        <div id="reports-log">
+          <div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v11a1.5 1.5 0 0 1-1.5 1.5h-10.5a1.5 1.5 0 0 1-1.5-1.5V4.5A1.5 1.5 0 0 1 7 3z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16h7M8.5 19h4"/></svg></div><div>No reports generated yet. Choose a template above to get started.</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="main" id="page-settings">
+  <div class="top-bar">
+    <div><div class="page-title">Settings</div><div class="page-sub">Preferences for your Barangay Portal</div></div>
+  </div>
+  <div class="content">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:860px">
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">🎨 Appearance</div></div>
+        <div class="card-body">
+          <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Choose your preferred interface theme. Your preference is saved locally.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button id="theme-dark-btn" onclick="setTheme('dark')" class="btn btn-primary" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:8px">
+              🌙 Dark Mode
+            </button>
+            <button id="theme-light-btn" onclick="setTheme('light')" class="btn btn-secondary" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:8px">
+              ☀️ Light Mode
+            </button>
+          </div>
+          <div id="theme-status" style="margin-top:10px;font-size:12px;color:var(--muted)">Current: Dark Mode</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">ℹ️ About</div></div>
+        <div class="card-body" style="font-size:12.5px;color:var(--muted);line-height:1.8">
+          <p><strong style="color:var(--text)">Dengue Alert v1.0</strong></p>
+          <p>Barangay Health Worker Portal — Dengue Case Reporting and Advisory System</p>
+          <p style="margin-top:8px"><strong style="color:var(--text)">Municipality:</strong> Janiuay, Iloilo</p>
+          <p><strong style="color:var(--text)">Role:</strong> Barangay Health Worker</p>
+          <p><strong style="color:var(--text)">By:</strong> Perez Et.al · CC 208 Methods of Research in Computing</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<!-- Supabase + Config -->
+<script src="config.js"></script>
+<script>
+// ── SESSION CHECK ────────────────────────────────────────────
+const user = SESSION.require('barangay');
+const BRGY = user?.barangay || 'Poblacion';
+
+// Update UI with user info
+document.getElementById('sidebar-brgy').textContent = `Barangay ${BRGY} · Janiuay`;
+document.getElementById('sidebar-name').textContent = user?.name || user?.email || 'BHW User';
+document.getElementById('sidebar-avatar').textContent = (user?.name || 'B')[0].toUpperCase();
+document.getElementById('dash-title').textContent = `Barangay ${BRGY} Dashboard`;
+document.getElementById('dash-sub').textContent = `Dengue monitoring — ${new Date().toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`;
+document.getElementById('history-sub').textContent = `All dengue cases submitted from Barangay ${BRGY}`;
+
+// Set today as max for onset date
+document.getElementById('f-onset').max = new Date().toISOString().split('T')[0];
+
+// ── PAGE NAVIGATION ─────────────────────────────────────────
+function showPage(id) {
+  closeSidebar();
+  document.querySelectorAll('.main').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const activeNav = document.querySelector(`.nav-item[data-page="${id}"]`);
+  if (activeNav) activeNav.classList.add('active');
+  // Clear alert badge when Alerts page is opened
+  if (id === 'alerts') {
+    const badge = document.getElementById('alert-badge');
+    if (badge) badge.style.display = 'none';
+    localStorage.setItem('da_brgy_alerts_read', Date.now().toString());
+  }
+  if (id === 'settings') updateThemeUI();
+  if (id === 'dashboard') loadDashboard();
+  if (id === 'history') loadHistory();
+  if (id === 'reports') loadReportsPage();
+  if (id === 'emails') loadBrgyEmailPage();
+  if (id === 'messages') loadMessages();
+}
+
+// ── GLOBAL DATA STORE ────────────────────────────────────────
+let allCases = [];
+
+// ── DASHBOARD ────────────────────────────────────────────────
+async function loadDashboard() {
+  const { data, error } = await DB.getBarangayCases(BRGY);
+  if (error) { showToast('⚠ Could not load data: ' + error.message, true); }
+
+  const cases = data || [];
+  allCases = cases;
+
+  // Stats
+  const now = new Date();
+  const window14 = new Date(now); window14.setDate(now.getDate() - 14);
+  const confirmed = cases.filter(c => c.status === 'Confirmed');
+  const in14days = confirmed.filter(c => new Date(c.onset_date) >= window14);
+  const pending = cases.filter(c => c.status === 'Pending');
+
+  document.getElementById('stat-total').textContent = cases.length;
+  document.getElementById('stat-14d').textContent = in14days.length;
+  document.getElementById('stat-pending').textContent = pending.length;
+  document.getElementById('stat-confirmed').textContent = confirmed.length;
+
+  // Alert badge
+  // Unread badge — show only when there are pending cases and Alerts not yet seen
+  const alertBadge = document.getElementById('alert-badge');
+  if (alertBadge) {
+    if (pending.length > 0) {
+      alertBadge.textContent = pending.length;
+      alertBadge.style.display = '';
+    } else {
+      alertBadge.style.display = 'none';
+    }
+  }
+
+  // Risk banner
+  const count14 = in14days.length;
+  const banner = document.getElementById('risk-banner');
+  if (count14 >= SYSTEM_CONFIG.outbreakThreshold) {
+    banner.className = 'risk-banner high';
+    document.getElementById('risk-level-text').style.color = 'var(--accent)';
+    document.getElementById('risk-level-text').textContent = `⚠ HIGH RISK — ${count14} confirmed cases in 14 days (Threshold: ${SYSTEM_CONFIG.outbreakThreshold})`;
+    document.getElementById('risk-desc').textContent = 'OUTBREAK RISK DETECTED. Please contact the RHU immediately and coordinate cleanup and fogging operations.';
+    banner.querySelector('div').textContent = '🚨';
+  } else if (count14 >= 3) {
+    banner.className = 'risk-banner medium';
+    document.getElementById('risk-level-text').style.color = 'var(--warn)';
+    document.getElementById('risk-level-text').textContent = `⚡ MEDIUM RISK — ${count14} confirmed cases in 14 days`;
+    document.getElementById('risk-desc').textContent = 'Elevated dengue activity detected. Intensify surveillance and community awareness activities.';
+    banner.querySelector('div').textContent = '⚠️';
+  } else {
+    banner.className = 'risk-banner low';
+    document.getElementById('risk-level-text').style.color = 'var(--safe)';
+    document.getElementById('risk-level-text').textContent = `✅ LOW RISK — ${count14} confirmed case${count14 !== 1 ? 's' : ''} in 14 days`;
+    document.getElementById('risk-desc').textContent = 'Your barangay is below the outbreak threshold. Continue routine surveillance and prevention activities.';
+    banner.querySelector('div').textContent = '✅';
+  }
+
+  // Recent cases table
+  const tbody = document.getElementById('recent-cases-tbody');
+  const recent = cases.slice(0, 8);
+  if (recent.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No cases submitted yet.</td></tr>';
+  } else {
+    tbody.innerHTML = recent.map(c => `
+      <tr>
+        <td><strong>${c.patient_name}</strong></td>
+        <td>${c.patient_age || '—'}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
+        <td><span class="chip ${c.severity==='Severe'?'high':c.severity==='Moderate'?'medium':c.severity==='Mild'?'low':''}" style="${c.severity==='Pending'||!c.severity?'background:var(--warn-bg);color:var(--warn);border-color:rgba(237,201,74,0.3)':''}">${c.severity==='Pending'||!c.severity?'⏳ TBD':c.severity}</span></td>
+        <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':c.status==='Rejected'?'high':'info-chip'}">${c.status}</span></td>
+      </tr>`).join('');
+  }
+
+  // Alerts feed (RHU confirmations, etc.)
+  renderAlerts(cases);
+}
+
+function renderAlerts(cases) {
+  const confirmed = cases.filter(c => c.status === 'Confirmed').slice(0, 4);
+  const pending = cases.filter(c => c.status === 'Pending').slice(0, 3);
+  let html = '';
+
+  if (confirmed.length) {
+    confirmed.forEach(c => {
+      html += `<div class="alert-item">
+        <div class="alert-dot low"></div>
+        <div><div class="alert-msg">✅ Case for <strong>${c.patient_name}</strong> confirmed by RHU</div>
+        <div class="alert-time">${formatDate(c.reviewed_at || c.report_date)}</div></div>
+      </div>`;
+    });
+  }
+  if (pending.length) {
+    pending.forEach(c => {
+      html += `<div class="alert-item">
+        <div class="alert-dot medium"></div>
+        <div><div class="alert-msg">⏳ <strong>${c.patient_name}</strong>'s case pending RHU review</div>
+        <div class="alert-time">${formatDate(c.report_date)}</div></div>
+      </div>`;
+    });
+  }
+  if (!html) html = '<div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></div>No recent alerts</div>';
+
+  document.getElementById('alerts-feed').innerHTML = html;
+  document.getElementById('all-alerts-feed').innerHTML = html;
+}
+
+// ── CASE SUBMISSION ──────────────────────────────────────────
+let selectedSeverity = '';
+
+function setSeverity(s) {
+  selectedSeverity = s;
+  document.getElementById('sev-mild').className = 'sev-btn' + (s === 'Mild' ? ' active-mild' : '');
+  document.getElementById('sev-moderate').className = 'sev-btn' + (s === 'Moderate' ? ' active-moderate' : '');
+  document.getElementById('sev-severe').className = 'sev-btn' + (s === 'Severe' ? ' active-severe' : '');
+}
+
+async function submitCase() {
+  const name     = document.getElementById('f-name').value.trim();
+  const age      = document.getElementById('f-age').value;
+  const sex      = document.getElementById('f-sex').value;
+  const onset    = document.getElementById('f-onset').value;
+  const address  = document.getElementById('f-address').value.trim();
+  const contact  = document.getElementById('f-contact').value.trim();
+  const notes    = document.getElementById('f-notes').value.trim();
+
+  const symptoms = Array.from(document.querySelectorAll('.checkbox-item input:checked')).map(c => c.value);
+
+  if (!name || !age || !sex || !onset) {
+    showToast('⚠ Please fill in all required fields.', true); return;
+  }
+  if (symptoms.length === 0) {
+    showToast('⚠ Please select at least one symptom.', true); return;
+  }
+  if (contact && !/^(09\d{9}|\+639\d{9})$/.test(contact)) {
+    showToast('⚠ Please enter a valid PH mobile number (e.g. 09171234567).', true); return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Submitting...';
+
+  const caseData = {
+    patientName: name,
+    age: parseInt(age),
+    sex, address,
+    contact: contact || null,
+    barangay: BRGY,
+    onsetDate: onset,
+    // severity will be assigned by RHU
+    symptoms,
+    notes,
+    submittedBy: user?.id || null
+  };
+
+  const { data, error } = await DB.submitCase(caseData);
+
+  if (error) {
+    showToast('⚠ Submission failed: ' + error.message, true);
+  } else {
+    showToast(`✅ Case for ${name} submitted to RHU!`);
+
+    // Send confirmation SMS to patient if mobile number provided
+    if (contact) {
+      const msg = `Dear ${name}, your dengue case report has been submitted to the Janiuay RHU for review.\nSeverity: ${selectedSeverity}\nSymptoms: ${symptoms.join(', ')}\nOnset: ${onset}\nPlease rest and stay hydrated. RHU will contact you if follow-up is needed. -Janiuay Dengue Alert System`;
+      await SMS.send(contact, name, '', msg, 'case-confirmation', user?.id, BRGY);
+    }
+
+    // Reset form
+    document.getElementById('case-form').querySelectorAll('input, textarea, select').forEach(f => {
+      if (f.type === 'checkbox') f.checked = false;
+      else f.value = '';
+    });
+    selectedSeverity = '';
+    showPage('dashboard');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '📤 Submit Case to RHU';
+}
+
+// ── CASE HISTORY ─────────────────────────────────────────────
+async function loadHistory() {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>';
+
+  const { data } = await DB.getBarangayCases(BRGY);
+  allCases = data || [];
+  renderHistory(allCases);
+}
+
+function renderHistory(cases) {
+  const tbody = document.getElementById('history-tbody');
+  if (!cases.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No cases found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = cases.map(c => `
+    <tr>
+      <td><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted)">${c.patient_address || '—'}</span></td>
+      <td>${c.patient_age || '—'} / ${c.patient_sex || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
+      <td><span class="chip ${c.severity==='Severe'?'high':c.severity==='Moderate'?'medium':c.severity==='Mild'?'low':''}" style="${c.severity==='Pending'||!c.severity?'background:var(--warn-bg);color:var(--warn);border-color:rgba(237,201,74,0.3)':''}">${c.severity==='Pending'||!c.severity?'⏳ TBD':c.severity}</span></td>
+      <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':c.status==='Rejected'?'high':'info-chip'}">${c.status}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${formatDate(c.report_date)}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.rhu_notes || '—'}</td>
+    </tr>`).join('');
+}
+
+function filterCases() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const status = document.getElementById('status-filter').value;
+  const severity = document.getElementById('severity-filter').value;
+
+  let filtered = allCases;
+  if (search) filtered = filtered.filter(c =>
+    c.patient_name?.toLowerCase().includes(search) ||
+    c.patient_address?.toLowerCase().includes(search)
+  );
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (severity) filtered = filtered.filter(c => c.severity === severity);
+  renderHistory(filtered);
+}
+
+function exportCSV() {
+  const headers = ['Patient Name','Age','Sex','Address','Barangay','Onset Date','Severity','Symptoms','Status','Report Date','RHU Notes'];
+  const rows = allCases.map(c => [
+    c.patient_name, c.patient_age, c.patient_sex, c.patient_address, c.barangay,
+    c.onset_date, c.severity, (c.symptoms||[]).join(';'), c.status,
+    c.report_date?.split('T')[0], c.rhu_notes || ''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v||''}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `dengue-cases-brgy${BRGY.replace(/\s/g,'-')}-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+}
+
+// ── BACKUP & RECOVERY: CSV IMPORT + PAPER FORM (blackout / server-down fallback) ──
+// This does not touch the DB layer — it just reuses DB.submitCase() in a loop,
+// so it works the same whether Firebase is online or the app is on the
+// localStorage fallback.
+
+const CSV_HEADER_MAP = {
+  'patient name': 'name', 'name': 'name',
+  'age': 'age',
+  'sex': 'sex', 'gender': 'sex',
+  'address': 'address', 'address / purok': 'address', 'address/purok': 'address',
+  'contact': 'contact', 'mobile': 'contact', 'mobile number': 'contact', 'phone': 'contact', 'patient mobile number': 'contact',
+  'onset date': 'onset', 'onset date (yyyy-mm-dd)': 'onset', 'date of onset': 'onset', 'date of symptom onset': 'onset',
+  'symptoms': 'symptoms', 'symptoms (separate with ;)': 'symptoms',
+  'notes': 'notes', 'additional notes': 'notes'
+};
+
+function normalizeCSVHeader(h) {
+  return (h || '').trim().toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim();
+}
+
+// Minimal CSV parser — handles quoted fields, embedded commas, and "" escaped quotes
+function parseCSVText(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  const s = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => (v || '').trim() !== ''));
+}
+
+function normalizeSexValue(s) {
+  const v = (s || '').trim().toLowerCase();
+  if (v.startsWith('m')) return 'Male';
+  if (v.startsWith('f')) return 'Female';
+  return s ? 'Other' : '';
+}
+
+function validateCSVRow(row) {
+  const missing = [];
+  if (!row.name) missing.push('Name');
+  if (!row.age || isNaN(parseInt(row.age))) missing.push('Age');
+  if (!row.sex) missing.push('Sex');
+  if (!row.onset) missing.push('Onset Date');
+  const symptoms = (row.symptoms || '').split(';').map(x => x.trim()).filter(Boolean);
+  if (symptoms.length === 0) missing.push('Symptoms');
+  return { valid: missing.length === 0, missing, symptoms };
+}
+
+let csvParsedRows = [];
+
+function downloadCSVTemplate() {
+  const headers = ['Patient Name', 'Age', 'Sex', 'Address', 'Mobile Number', 'Onset Date (YYYY-MM-DD)', 'Symptoms (separate with ;)', 'Notes'];
+  const example = ['Juan dela Cruz', '25', 'Male', 'Purok 3, Poblacion', '09171234567', new Date().toISOString().split('T')[0], 'Fever;Headache;Body Aches', 'Recorded on paper during outage'];
+  const csv = [headers, example].map(r => r.map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `dengue-case-import-template-brgy${BRGY.replace(/\s/g, '-')}.csv`;
+  a.click();
+}
+
+function handleCSVFile(event) {
+  const file = event.target.files[0];
+  event.target.value = ''; // allow re-selecting the same file again later
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const rows = parseCSVText(e.target.result);
+      if (rows.length < 2) { showToast('⚠ CSV appears empty or is missing a header row.', true); return; }
+      const keys = rows[0].map(h => CSV_HEADER_MAP[normalizeCSVHeader(h)] || null);
+      csvParsedRows = rows.slice(1).map(r => {
+        const obj = {};
+        keys.forEach((k, i) => { if (k) obj[k] = (r[i] || '').trim(); });
+        return obj;
+      });
+      renderCSVPreview();
+    } catch (err) {
+      showToast('⚠ Could not read that CSV file: ' + err.message, true);
+    }
+  };
+  reader.onerror = () => showToast('⚠ Could not read that file.', true);
+  reader.readAsText(file);
+}
+
+function renderCSVPreview() {
+  const card = document.getElementById('csv-preview-card');
+  const tbody = document.getElementById('csv-preview-tbody');
+
+  if (!csvParsedRows.length) {
+    card.style.display = 'none';
+    showToast('⚠ No data rows found in that CSV.', true);
+    return;
+  }
+
+  let validCount = 0;
+  tbody.innerHTML = csvParsedRows.map((row, i) => {
+    const v = validateCSVRow(row);
+    if (v.valid) validCount++;
+    const statusHtml = v.valid
+      ? '<span class="chip low">✓ Ready</span>'
+      : `<span class="chip high">⚠ Missing ${v.missing.join(', ')}</span>`;
+    return `<tr>
+      <td style="color:var(--muted)">${i + 1}</td>
+      <td>${row.name || '—'}</td>
+      <td>${row.age || '—'}</td>
+      <td>${row.sex || '—'}</td>
+      <td>${row.onset || '—'}</td>
+      <td style="max-width:220px;white-space:normal">${row.symptoms || '—'}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('csv-preview-sub').textContent =
+    `${csvParsedRows.length} row(s) found — ${validCount} ready to import, ${csvParsedRows.length - validCount} will be skipped`;
+  const importBtn = document.getElementById('csv-import-btn');
+  importBtn.textContent = `Import ${validCount} Valid Row${validCount === 1 ? '' : 's'} →`;
+  importBtn.disabled = validCount === 0;
+  document.getElementById('csv-import-progress').style.display = 'none';
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function importAllValidRows() {
+  const btn = document.getElementById('csv-import-btn');
+  const progress = document.getElementById('csv-import-progress');
+  const validRows = csvParsedRows
+    .map(r => ({ ...r, _v: validateCSVRow(r) }))
+    .filter(r => r._v.valid);
+
+  if (!validRows.length) { showToast('⚠ No valid rows to import.', true); return; }
+
+  btn.disabled = true;
+  progress.style.display = 'block';
+  let success = 0, failed = 0;
+
+  for (let i = 0; i < validRows.length; i++) {
+    const row = validRows[i];
+    progress.textContent = `Importing case ${i + 1} of ${validRows.length}...`;
+    const caseData = {
+      patientName: row.name,
+      age: parseInt(row.age),
+      sex: normalizeSexValue(row.sex),
+      address: row.address || '',
+      contact: row.contact || '',
+      barangay: BRGY,
+      onsetDate: row.onset,
+      symptoms: row._v.symptoms,
+      notes: row.notes || '(Imported from paper/CSV backup)',
+      submittedBy: user?.id || null
+    };
+    const { error } = await DB.submitCase(caseData);
+    if (error) failed++; else success++;
+  }
+
+  progress.textContent = `Done — ${success} imported${failed ? `, ${failed} failed` : ''}.`;
+  showToast(`✅ Imported ${success} case(s) from CSV${failed ? `, ${failed} failed` : ''}.`);
+  btn.disabled = false;
+  csvParsedRows = [];
+  setTimeout(() => { document.getElementById('csv-preview-card').style.display = 'none'; }, 2500);
+  loadDashboard();
+}
+
+function downloadPaperFormPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, margin = 14;
+
+  function field(label, x, y, width) {
+    doc.setFontSize(8); doc.setTextColor(110);
+    doc.text(label, x, y);
+    doc.setDrawColor(140); doc.setLineWidth(0.2);
+    doc.line(x, y + 5, x + width, y + 5);
+  }
+
+  function drawForm(startY, copyLabel) {
+    let y = startY;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20);
+    doc.text('Dengue Case Report — Paper Backup Form', margin, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+    doc.text(`${SYSTEM_CONFIG.municipality}, ${SYSTEM_CONFIG.province}  •  Barangay: ${BRGY}  •  ${copyLabel}`, margin, y + 5);
+    y += 9;
+    doc.setDrawColor(180); doc.line(margin, y, W - margin, y);
+    y += 8;
+
+    field('Patient Full Name', margin, y, 70);
+    field('Age', margin + 76, y, 20);
+    field('Sex (M/F)', margin + 100, y, 26);
+    field('Date of Onset (YYYY-MM-DD)', margin + 130, y, 42);
+    y += 11;
+
+    field('Address / Purok', margin, y, 90);
+    field('Mobile Number (optional)', margin + 96, y, 76);
+    y += 12;
+
+    doc.setFontSize(8); doc.setTextColor(90);
+    doc.text('Symptoms (check all that apply):', margin, y);
+    y += 5;
+    const symptoms = ['Fever (>=38C)', 'Skin Rash', 'Severe Headache', 'Body Aches / Myalgia', 'Joint Pain',
+      'Nausea / Vomiting', 'Nosebleed / Bleeding', 'Abdominal Pain', 'Eye Pain', 'Extreme Fatigue'];
+    doc.setTextColor(20); doc.setDrawColor(120);
+    let sx = margin, sy = y, col = 0;
+    symptoms.forEach((s) => {
+      doc.rect(sx, sy - 3, 3, 3);
+      doc.setFontSize(8);
+      doc.text(s, sx + 5, sy);
+      col++;
+      if (col === 2) { col = 0; sx = margin; sy += 6; } else { sx = margin + 91; }
+    });
+    y = sy + (col === 0 ? 2 : 6) + 4;
+
+    field('Additional Notes', margin, y, W - margin * 2);
+    y += 12;
+
+    field('Encoded by (BHW Name & Signature)', margin, y, 90);
+    field('Date Encoded', margin + 96, y, 60);
+    y += 8;
+
+    doc.setDrawColor(200);
+    doc.rect(margin - 5, startY - 8, W - (margin - 5) * 2, (y - startY) + 10);
+    return y + 6;
+  }
+
+  const secondFormY = drawForm(20, 'Copy 1');
+  drawForm(Math.max(secondFormY, 150), 'Copy 2');
+
+  doc.save(`dengue-paper-form-brgy${BRGY.replace(/\s/g, '-')}.pdf`);
+}
+
+// ── SMS COMPOSER (BARANGAY) ───────────────────────────────────
+let brgyCurrentRecipient = 'all';
+let brgyCases = [];
+
+const BRGY_TEMPLATES = {
+  prevention: {
+    type: 'prevention',
+    subject: 'Dengue Prevention Reminder — Stay Safe!',
+    body: `Dear Resident,
+
+This is a dengue prevention reminder from your Barangay Health Worker.
+
+Please take the following steps to protect your family:
+• Empty all water containers (pails, drums, flower vases) at least once a week
+• Change water in pet dishes and bird baths daily
+• Cover water storage containers tightly
+• Clean gutters and drains regularly
+• Use mosquito repellent and wear long sleeves at dusk and dawn
+
+If anyone in your household develops fever, rash, or body aches, please visit the RHU immediately.
+
+Stay safe and healthy!
+Your Barangay Health Worker`
+  },
+  warning: {
+    type: 'warning',
+    subject: '⚠️ Dengue Warning — Increased Cases in Your Area',
+    body: `Dear Resident,
+
+We are issuing a DENGUE WARNING for our barangay.
+
+Multiple dengue cases have been reported recently. Please be on HIGH ALERT.
+
+🚨 IMMEDIATE ACTIONS:
+• Check and eliminate all mosquito breeding sites NOW
+• Seek medical attention IMMEDIATELY if you have: high fever, severe headache, pain behind the eyes, rash, nausea
+• Do NOT self-medicate — go to the RHU or nearest hospital
+• Cooperate with barangay health workers during home visits
+
+Your health is our priority. Act now.
+
+Your Barangay Health Worker`
+  },
+  fogging: {
+    type: 'fogging',
+    subject: '💨 Scheduled Fogging Notice — Action Required',
+    body: `Dear Resident,
+
+We will be conducting FOGGING operations in our barangay as part of dengue prevention efforts.
+
+Scheduled fogging areas: All purok zones
+
+Before fogging:
+• Cover or store all food and drinking water
+• Remove pets and small children from the area
+• Close windows and doors during fogging
+• Remain outside for at least 30 minutes after fogging
+
+For questions, contact your Barangay Health Worker.
+
+Thank you for your cooperation.
+Your Barangay Health Worker`
+  },
+  cleanup: {
+    type: 'intervention',
+    subject: '🧹 Community Clean-Up Drive — Please Participate',
+    body: `Dear Resident,
+
+We are organizing a COMMUNITY CLEAN-UP DRIVE to eliminate dengue mosquito breeding sites in our barangay.
+
+Your participation is needed and highly encouraged.
+
+Please prepare:
+• Clear your surroundings of stagnant water
+• Remove old tires, cans, and containers that collect water
+• Trim overgrown plants and grasses
+
+Together we can stop dengue in our community!
+
+Your Barangay Health Worker`
+  }
+};
+
+function setBrgyRecipient(btn, val) {
+  brgyCurrentRecipient = val;
+  document.querySelectorAll('#brgy-recip-tabs .rec-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateBrgyRecipientCount();
+}
+
+function updateBrgyRecipientCount() {
+  const el = document.getElementById('brgy-recipient-count');
+  if (!el) return;
+  let pool = brgyCases.filter(c => c.patient_contact && c.patient_contact.trim());
+  if (brgyCurrentRecipient === 'confirmed') pool = pool.filter(c => c.status === 'Confirmed');
+  const unique = [...new Set(pool.map(c => c.patient_contact.trim()))];
+  el.textContent = `${unique.length} patient number${unique.length !== 1 ? 's' : ''} will receive this SMS advisory`;
+  el.style.color = unique.length > 0 ? 'var(--safe)' : 'var(--muted)';
+}
+
+function applyBrgyTemplate(key) {
+  const t = BRGY_TEMPLATES[key];
+  if (!t) return;
+  document.getElementById('brgy-email-subject').value = t.subject;
+  document.getElementById('brgy-email-body').value = t.body;
+  const typeEl = document.getElementById('brgy-email-type');
+  for (let i = 0; i < typeEl.options.length; i++) {
+    if (typeEl.options[i].value === t.type) { typeEl.selectedIndex = i; break; }
+  }
+  updateBrgyPreview();
+  showToast('📋 Template applied!');
+}
+
+function updateBrgyPreview() {
+  // Nothing to render visually but keep hook for future preview panel
+}
+
+async function loadBrgyEmailPage() {
+  // Load cases for this barangay
+  document.getElementById('composer-brgy-name').textContent = BRGY;
+  const { data } = await DB.getBarangayCases(BRGY);
+  brgyCases = data || [];
+  updateBrgyRecipientCount();
+
+  // Check SMS server
+  const statusEl = document.getElementById('brgy-smtp-status');
+  const online = await SMS.checkServer();
+  if (statusEl) {
+    statusEl.textContent = online ? '✅ SMS server online' : '⚠️ SMS server offline';
+    statusEl.style.color = online ? 'var(--safe)' : 'var(--accent)';
+  }
+
+  // Load sent log
+  loadBrgyEmailLog();
+}
+
+async function loadBrgyEmailLog() {
+  const { data } = await DB.getSmsLogs(30);
+  const logs = (data || []).filter(e => e.barangay === BRGY || e.sent_by === user?.id);
+  const el = document.getElementById('brgy-email-log');
+  if (!logs.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:30px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></div>No advisories sent yet.</div>';
+    return;
+  }
+  el.innerHTML = logs.map(e => `
+    <div style="padding:10px 16px;border-bottom:1px solid rgba(45,55,72,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${e.type || 'Advisory'}</span>
+        <span style="font-size:11px;padding:2px 7px;border-radius:8px;background:var(--info-bg);color:var(--info)">${e.recipient_count || 0} sent</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${e.subject || '—'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatDate(e.sent_at)}</div>
+    </div>`).join('');
+}
+
+async function sendBrgyAdvisory() {
+  const subject = document.getElementById('brgy-email-subject').value.trim();
+  const body    = document.getElementById('brgy-email-body').value.trim();
+  const typeEl  = document.getElementById('brgy-email-type');
+  const type    = typeEl.options[typeEl.selectedIndex].value;
+  const btn     = document.getElementById('brgy-send-btn');
+
+  if (!subject) { showToast('⚠ Please enter a subject.', true); return; }
+  if (!body)    { showToast('⚠ Please enter a message.', true); return; }
+
+  // Build recipient list from loaded cases
+  let pool = brgyCases.filter(c => c.patient_contact && c.patient_contact.trim());
+  if (brgyCurrentRecipient === 'confirmed') pool = pool.filter(c => c.status === 'Confirmed');
+  const unique = [...new Map(pool.map(c => [c.patient_contact.trim(), { contact: c.patient_contact.trim(), name: c.patient_name }])).values()];
+
+  if (unique.length === 0) {
+    showToast('⚠ No patient mobile numbers found for this selection. Make sure patients have a mobile number recorded in their case reports.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = `⏳ Sending to ${unique.length} recipient${unique.length !== 1 ? 's' : ''}...`;
+
+  const results = await SMS.sendBulk(unique, subject, body, type, user?.id);
+  const sentCount = results?.sent ?? (results?.filter?.(r => r.success)?.length ?? 0);
+
+  await DB.logSms({
+    type, subject,
+    to: `${sentCount} of ${unique.length} recipients`,
+    count: sentCount,
+    barangay: BRGY,
+    sentBy: user?.id
+  });
+
+  showToast(`✅ Advisory sent to ${sentCount} patient${sentCount !== 1 ? 's' : ''} in Barangay ${BRGY}!`);
+
+  // Reset form
+  document.getElementById('brgy-email-subject').value = '';
+  document.getElementById('brgy-email-body').value = '';
+  loadBrgyEmailLog();
+
+  btn.disabled = false;
+  btn.textContent = '📤 Send Advisory';
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-PH', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function showToast(msg, isWarn = false) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.style.borderColor = isWarn ? 'rgba(245,101,101,0.4)' : 'var(--border)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ── THEME ─────────────────────────────────────────────────────
+function setTheme(mode) {
+  if (mode === 'light') {
+    document.body.classList.add('light-mode');
+    localStorage.setItem('dengue_theme', 'light');
+  } else {
+    document.body.classList.remove('light-mode');
+    localStorage.setItem('dengue_theme', 'dark');
+  }
+  updateThemeUI();
+}
+function updateThemeUI() {
+  const isLight = document.body.classList.contains('light-mode');
+  const darkBtn  = document.getElementById('theme-dark-btn');
+  const lightBtn = document.getElementById('theme-light-btn');
+  const statusEl = document.getElementById('theme-status');
+  if (!darkBtn) return;
+  if (isLight) {
+    darkBtn.className  = 'btn btn-secondary';
+    lightBtn.className = 'btn btn-primary';
+    if (statusEl) statusEl.textContent = 'Current: Light Mode';
+  } else {
+    darkBtn.className  = 'btn btn-primary';
+    lightBtn.className = 'btn btn-secondary';
+    if (statusEl) statusEl.textContent = 'Current: Dark Mode';
+  }
+}
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('dengue_theme');
+  if (saved === 'light') document.body.classList.add('light-mode');
+})();
+
+// ── MOBILE SIDEBAR ────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const burger  = document.getElementById('hamburger');
+  const isOpen  = sidebar.classList.toggle('mobile-open');
+  overlay.classList.toggle('open', isOpen);
+  burger.classList.toggle('open', isOpen);
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+}
+
+// ── MESSAGE RHU ──────────────────────────────────────────────
+let currentMsgType     = 'update';
+let currentMsgPriority = 'normal';
+
+const MSG_TEMPLATES = {
+  fogging_done: {
+    type: 'fogging',
+    subject: 'Fogging Operations Completed',
+    body: `Dear RHU,\n\nWe have successfully completed fogging operations in Barangay ${BRGY}.\n\nDate conducted: ${new Date().toLocaleDateString('en-PH')}\nAreas covered: [List puroks covered]\nChemical used: [e.g. Reslin, Malathion]\nPersonnel involved: [Number of BHWs]\n\nAll residents were advised to close windows during the operation and to re-open after 30 minutes.\n\nWe will continue to monitor for new dengue cases.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  },
+  cleanup_done: {
+    type: 'cleanup',
+    subject: 'Community Clean-up Drive Completed',
+    body: `Dear RHU,\n\nWe have conducted a community clean-up drive in Barangay ${BRGY}.\n\nDate conducted: ${new Date().toLocaleDateString('en-PH')}\nParticipants: [Number of residents]\nAreas covered: [Areas/puroks]\nContainers removed: [Estimate]\nKey findings: [Any notable breeding sites found]\n\nWe will conduct a follow-up visit next week.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  },
+  home_visit: {
+    type: 'update',
+    subject: 'Home Visit Report',
+    body: `Dear RHU,\n\nWe conducted home visits in Barangay ${BRGY} today, ${new Date().toLocaleDateString('en-PH')}.\n\nHouseholds visited: [Number]\nHouseholds with water containers: [Number]\nContainers with larvae found: [Number]\nContainers treated/removed: [Number]\nHouseholds with febrile cases: [Number]\n\nAdvisories were distributed to all visited households.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  },
+  new_cases: {
+    type: 'concern',
+    subject: 'Update on Suspected Dengue Cases',
+    body: `Dear RHU,\n\nI am writing to report suspected dengue cases in Barangay ${BRGY}.\n\nNumber of suspected cases: [Number]\nAffected area / purok: [Purok name]\nCommon symptoms observed: [Fever, rash, etc.]\nPatients referred to: [RHU / Hospital]\n\nPlease advise on next steps and if fogging assistance is needed.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  },
+  supply_request: {
+    type: 'supply',
+    subject: 'Request for Supplies / Larvicide',
+    body: `Dear RHU,\n\nI would like to request the following supplies for Barangay ${BRGY}:\n\n• Larvicide (Abate/Temephos): [Quantity]\n• Mosquito repellent: [Quantity]\n• IEC materials (flyers/posters): [Quantity]\n• Personal protective equipment: [Quantity]\n\nReason: [Explain the current dengue situation]\n\nThank you for your continued support.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  },
+  concern: {
+    type: 'concern',
+    subject: 'Urgent Concern — Barangay ' + BRGY,
+    body: `Dear RHU,\n\nI am reporting an urgent concern from Barangay ${BRGY}.\n\nConcern: [Describe the issue clearly]\nLocation: [Specific area or purok]\nDate observed: ${new Date().toLocaleDateString('en-PH')}\n\nImmediate action needed: [What help is needed from the RHU]\n\nPlease coordinate with us as soon as possible.\n\nRespectfully,\n${user?.name || 'BHW'}\nBarangay ${BRGY}`
+  }
+};
+
+function setMsgType(btn, type) {
+  currentMsgType = type;
+  document.querySelectorAll('#msg-type-tabs .rec-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setMsgPriority(p) {
+  currentMsgPriority = p;
+  ['normal','urgent','critical'].forEach(k => {
+    const el = document.getElementById('pri-' + k);
+    if (!el) return;
+    el.className = 'sev-btn';
+    if (k === 'normal'   && p === 'normal')   el.className = 'sev-btn active-mild';
+    if (k === 'urgent'   && p === 'urgent')   el.className = 'sev-btn active-moderate';
+    if (k === 'critical' && p === 'critical') el.className = 'sev-btn active-severe';
+  });
+}
+
+function applyMsgTemplate(key) {
+  const t = MSG_TEMPLATES[key];
+  if (!t) return;
+  document.getElementById('msg-subject').value = t.subject;
+  document.getElementById('msg-body').value    = t.body;
+  // Set type tab
+  currentMsgType = t.type;
+  document.querySelectorAll('#msg-type-tabs .rec-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === t.type);
+  });
+  showToast('📋 Template applied!');
+}
+
+async function sendRhuMessage() {
+  const subject  = document.getElementById('msg-subject').value.trim();
+  const body     = document.getElementById('msg-body').value.trim();
+  const btn      = document.getElementById('send-msg-btn');
+
+  if (!subject) { showToast('⚠ Please enter a subject.', true); return; }
+  if (!body)    { showToast('⚠ Please enter a message.', true); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending...';
+
+  const msgData = {
+    type:      'rhu_message',
+    subtype:   currentMsgType,
+    subject,
+    body,
+    priority:  currentMsgPriority,
+    barangay:  BRGY,
+    sentBy:    user?.id || null,
+    senderName: user?.name || 'BHW',
+    status:    'unread',
+    sentAt:    new Date().toISOString()
+  };
+
+  // Save to Firestore alerts/messages collection
+  try {
+    await firebase.firestore().collection('rhu_messages').add(msgData);
+    showToast('✅ Message sent to RHU!');
+    document.getElementById('msg-subject').value = '';
+    document.getElementById('msg-body').value    = '';
+    currentMsgPriority = 'normal';
+    setMsgPriority('normal');
+    loadMessages();
+  } catch(e) {
+    showToast('⚠ Failed to send: ' + e.message, true);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '📤 Send Message to RHU';
+}
+
+async function loadMessages() {
+  const el = document.getElementById('msg-thread');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>';
+
+  try {
+    const snap = await firebase.firestore()
+      .collection('rhu_messages')
+      .where('barangay', '==', BRGY)
+      .orderBy('sentAt', 'desc')
+      .limit(20)
+      .get();
+
+    if (snap.empty) {
+      el.innerHTML = '<div class="empty-state" style="padding:32px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/></svg></div>No messages sent yet.</div>';
+      return;
+    }
+
+    const PRIORITY_COLORS = { normal: 'var(--safe)', urgent: 'var(--warn)', critical: 'var(--accent)' };
+    const PRIORITY_ICONS  = { normal: '🟢', urgent: '🟠', critical: '🔴' };
+    const TYPE_ICONS = { fogging:'💨', cleanup:'🧹', update:'📋', concern:'⚠️', supply:'📦' };
+
+    el.innerHTML = snap.docs.map((doc, idx) => {
+      const m = doc.data();
+      const col = PRIORITY_COLORS[m.priority] || 'var(--muted)';
+      const icon = TYPE_ICONS[m.subtype] || '📋';
+      const pIcon = PRIORITY_ICONS[m.priority] || '🟢';
+      const safeId = 'sent_' + idx;
+      const rhuNoteBg = m.rhuNote ? `background:var(--safe-bg);border:1px solid rgba(72,187,120,0.3);border-radius:7px;padding:8px 10px;font-size:12px;color:var(--safe)` : '';
+      return `
+      <div style="border-bottom:1px solid rgba(45,55,72,0.4)">
+        <!-- Header row — click to expand -->
+        <div onclick="toggleSentRow('${safeId}')" style="padding:14px 18px;cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0">
+              <span style="font-size:15px;flex-shrink:0">${icon}</span>
+              <span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.subject}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <span style="font-size:10px;padding:2px 8px;border-radius:99px;background:rgba(45,55,72,0.5);color:${col};white-space:nowrap">${pIcon} ${(m.priority||'normal').charAt(0).toUpperCase()+(m.priority||'normal').slice(1)}</span>
+              <span id="sent-chevron-${safeId}" style="font-size:11px;color:var(--muted);transition:transform .2s">▼</span>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
+            <span style="font-size:11px;color:var(--muted)">${formatDate(m.sentAt)}</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:99px;background:${m.status==='read'?'var(--safe-bg)':'var(--info-bg)'};color:${m.status==='read'?'var(--safe)':'var(--info)'}">
+              ${m.status === 'read' ? '✓ Read by RHU' : '⏳ Pending'}
+            </span>
+          </div>
+        </div>
+        <!-- Expandable detail -->
+        <div id="sent-detail-${safeId}" style="display:none;background:var(--surface2);border-top:1px solid var(--border);padding:14px 18px;animation:fadeIn .15s ease">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.7;max-height:260px;overflow-y:auto">${m.body || '—'}</div>
+          ${m.rhuNote ? `<div style="margin-top:10px;${rhuNoteBg}">📝 RHU Note: ${m.rhuNote}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state" style="padding:32px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19L12 3.5z"/><path d="M12 9.8v4.4"/><circle cx="12" cy="17" r="0.15" fill="currentColor"/></svg></div>${e.message}</div>`;
+  }
+}
+
+function toggleSentRow(safeId) {
+  const detailEl  = document.getElementById('sent-detail-' + safeId);
+  const chevronEl = document.getElementById('sent-chevron-' + safeId);
+  if (!detailEl) return;
+  const isOpen = detailEl.style.display !== 'none';
+  // Close all others
+  document.querySelectorAll('[id^="sent-detail-"]').forEach(el => { el.style.display = 'none'; });
+  document.querySelectorAll('[id^="sent-chevron-"]').forEach(el => { el.style.transform = ''; });
+  if (!isOpen) {
+    detailEl.style.display = 'block';
+    if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
+  }
+}
+
+// ── END MESSAGE RHU ──────────────────────────────────────────
+
+
+// ── AUTO REPORTS ─────────────────────────────────────────────
+let currentReportType = null;
+let reportCases = [];
+const generatedReports = [];
+
+function loadReportsPage() {
+  document.getElementById('reports-sub').textContent =
+    `Generate official PDF reports for Barangay ${BRGY} · Janiuay`;
+  document.getElementById('rpt-preparer').value = user?.name || '';
+  // Set default dates: last 7 days
+  const today = new Date();
+  const week = new Date(today); week.setDate(today.getDate() - 6);
+  document.getElementById('rpt-date-to').value = today.toISOString().split('T')[0];
+  document.getElementById('rpt-date-from').value = week.toISOString().split('T')[0];
+}
+
+function selectReportType(type) {
+  currentReportType = type;
+  const titles = {
+    weekly: '📅 Weekly Summary Report',
+    monthly: '🗓️ Monthly Dengue Report',
+    outbreak: '🚨 Outbreak Alert Report'
+  };
+  const subs = {
+    weekly: 'Covers the last 7 days by default — adjust dates as needed',
+    monthly: 'Covers full patient list and monthly trend for official submission',
+    outbreak: 'Emergency report — generated when cases exceed the outbreak threshold'
+  };
+  document.getElementById('builder-title').textContent = titles[type];
+  document.getElementById('builder-sub').textContent = subs[type];
+  document.getElementById('report-builder').style.display = 'block';
+
+  // Auto-set dates based on type
+  const today = new Date();
+  if (type === 'weekly') {
+    const from = new Date(today); from.setDate(today.getDate() - 6);
+    document.getElementById('rpt-date-from').value = from.toISOString().split('T')[0];
+    document.getElementById('rpt-date-to').value = today.toISOString().split('T')[0];
+  } else if (type === 'monthly') {
+    const from = new Date(today.getFullYear(), today.getMonth(), 1);
+    document.getElementById('rpt-date-from').value = from.toISOString().split('T')[0];
+    document.getElementById('rpt-date-to').value = today.toISOString().split('T')[0];
+  } else {
+    const from = new Date(today); from.setDate(today.getDate() - 13);
+    document.getElementById('rpt-date-from').value = from.toISOString().split('T')[0];
+    document.getElementById('rpt-date-to').value = today.toISOString().split('T')[0];
+  }
+  document.getElementById('rpt-preview-stats').style.display = 'none';
+  document.getElementById('report-builder').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeReportBuilder() {
+  document.getElementById('report-builder').style.display = 'none';
+  currentReportType = null;
+}
+
+async function getFilteredCases() {
+  const { data } = await DB.getBarangayCases(BRGY);
+  let cases = data || [];
+  const from = document.getElementById('rpt-date-from').value;
+  const to = document.getElementById('rpt-date-to').value;
+  const statusF = document.getElementById('rpt-status-filter').value;
+  if (from) cases = cases.filter(c => (c.report_date || '') >= from);
+  if (to) cases = cases.filter(c => (c.report_date || '') <= to + 'T23:59:59');
+  if (statusF !== 'all') cases = cases.filter(c => c.status === statusF);
+  return cases;
+}
+
+async function previewReportStats() {
+  const btn = document.getElementById('gen-pdf-btn');
+  btn.disabled = true;
+  const cases = await getFilteredCases();
+  reportCases = cases;
+  const confirmed = cases.filter(c => c.status === 'Confirmed').length;
+  const pending = cases.filter(c => c.status === 'Pending').length;
+  const severe = cases.filter(c => c.severity === 'Severe').length;
+  const risk14 = cases.filter(c => {
+    const d = new Date(c.report_date);
+    const now = new Date();
+    return (now - d) / (1000 * 60 * 60 * 24) <= 14 && c.status === 'Confirmed';
+  }).length;
+  const riskLabel = risk14 >= (SYSTEM_CONFIG?.outbreakThreshold || 5) ? 'HIGH' : risk14 >= 3 ? 'MED' : 'LOW';
+
+  document.getElementById('prev-total').textContent = cases.length;
+  document.getElementById('prev-confirmed').textContent = confirmed;
+  document.getElementById('prev-pending').textContent = pending;
+  document.getElementById('prev-severe').textContent = severe;
+  document.getElementById('prev-risk').textContent = riskLabel;
+  document.getElementById('prev-risk').style.color = riskLabel === 'HIGH' ? 'var(--accent)' : riskLabel === 'MED' ? 'var(--warn)' : 'var(--safe)';
+  document.getElementById('rpt-preview-stats').style.display = 'block';
+  btn.disabled = false;
+}
+
+function maskName(name, mode) {
+  if (!name) return 'Unknown';
+  if (mode === 'anon') return 'Anonymous';
+  if (mode === 'initials') {
+    return name.split(' ').map(w => w[0] ? w[0].toUpperCase() + '.' : '').join(' ');
+  }
+  return name;
+}
+
+async function generatePDF() {
+  const btn = document.getElementById('gen-pdf-btn');
+  btn.disabled = true;
+  btn.querySelector('span').textContent = '⏳ Generating...';
+
+  try {
+    const cases = await getFilteredCases();
+    reportCases = cases;
+    const from = document.getElementById('rpt-date-from').value;
+    const to = document.getElementById('rpt-date-to').value;
+    const preparer = document.getElementById('rpt-preparer').value || user?.name || 'BHW';
+    const privacy = document.getElementById('rpt-privacy').value;
+    const lang = document.getElementById('rpt-lang').value;
+    const isFil = lang === 'fil';
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210, pageH = 297;
+    const margin = 18;
+    let y = 0;
+
+    // ── Color palette ────────────────────────────────
+    const RED = [220, 53, 69], BLUE = [41, 128, 185], GREEN = [39, 174, 96];
+    const ORANGE = [230, 126, 34], GRAY = [113, 128, 150], DARKBG = [22, 27, 34];
+    const SURFACE = [30, 40, 52], WHITE = [255, 255, 255], LIGHT = [240, 244, 248];
+    const GOLD = [236, 201, 75];
+
+    const confirmed = cases.filter(c => c.status === 'Confirmed');
+    const pending = cases.filter(c => c.status === 'Pending');
+    const severe = cases.filter(c => c.severity === 'Severe');
+    const moderate = cases.filter(c => c.severity === 'Moderate');
+    const mild = cases.filter(c => c.severity === 'Mild');
+    const risk14 = confirmed.filter(c => {
+      const d = new Date(c.report_date);
+      return (new Date() - d) / 86400000 <= 14;
+    }).length;
+    const threshold = SYSTEM_CONFIG?.outbreakThreshold || 5;
+    const riskLevel = risk14 >= threshold ? (isFil ? 'MATAAS' : 'HIGH') :
+                      risk14 >= 3 ? (isFil ? 'KATAMTAMAN' : 'MEDIUM') :
+                                    (isFil ? 'MABABA' : 'LOW');
+    const riskColor = riskLevel === 'HIGH' || riskLevel === 'MATAAS' ? RED :
+                      riskLevel === 'MEDIUM' || riskLevel === 'KATAMTAMAN' ? ORANGE : GREEN;
+
+    const labelMap = {
+      reportTitle: { weekly: isFil ? 'LINGGUHANG ULAT SA DENGUE' : 'WEEKLY DENGUE SURVEILLANCE REPORT',
+                     monthly: isFil ? 'BUWANANG ULAT SA DENGUE' : 'MONTHLY DENGUE SURVEILLANCE REPORT',
+                     outbreak: isFil ? 'ULAT SA OUTBREAK NG DENGUE' : 'DENGUE OUTBREAK ALERT REPORT' },
+      barangay: isFil ? 'Barangay' : 'Barangay',
+      municipality: isFil ? 'Munisipalidad ng Janiuay, Iloilo' : 'Municipality of Janiuay, Iloilo',
+      period: isFil ? 'Panahon ng Ulat' : 'Report Period',
+      preparedBy: isFil ? 'Inihanda ni' : 'Prepared By',
+      dateGenerated: isFil ? 'Petsa ng Henerasyon' : 'Date Generated',
+      totalCases: isFil ? 'Kabuuang Kaso' : 'Total Cases',
+      confirmed: isFil ? 'Nakumpirma' : 'Confirmed',
+      pending: isFil ? 'Naghihintay' : 'Pending',
+      severe: isFil ? 'Malubha' : 'Severe',
+      moderate: isFil ? 'Katamtaman' : 'Moderate',
+      mild: isFil ? 'Banayad' : 'Mild',
+      riskLevel: isFil ? 'Antas ng Panganib' : 'Risk Level',
+      patientList: isFil ? 'LISTAHAN NG PASYENTE' : 'PATIENT CASE LIST',
+      name: isFil ? 'Pangalan' : 'Patient Name',
+      age: isFil ? 'Edad' : 'Age',
+      sex: isFil ? 'Kasarian' : 'Sex',
+      onset: isFil ? 'Petsa ng Simula' : 'Onset Date',
+      severity: isFil ? 'Kalubhaan' : 'Severity',
+      status: isFil ? 'Katayuan' : 'Status',
+      notes: isFil ? 'Mga Tala ng RHU' : 'RHU Notes',
+      recommendations: isFil ? 'MGA REKOMENDASYON' : 'RECOMMENDATIONS',
+      footer: isFil ? 'Opisyal na dokumento ng Barangay Health Worker — Dengue Alert System · Janiuay, Iloilo'
+                    : 'Official Barangay Health Worker document — Dengue Alert System · Janiuay, Iloilo',
+    };
+
+    const addPage = () => { doc.addPage(); y = margin; };
+    const checkY = (needed = 10) => { if (y + needed > pageH - 20) addPage(); };
+
+    // ══════════════════════════════════════════════════
+    // HEADER BLOCK
+    // ══════════════════════════════════════════════════
+    // Dark banner header
+    doc.setFillColor(...DARKBG);
+    doc.rect(0, 0, W, 46, 'F');
+
+    // Left colored accent bar
+    const accentC = currentReportType === 'outbreak' ? RED : currentReportType === 'monthly' ? GREEN : BLUE;
+    doc.setFillColor(...accentC);
+    doc.rect(0, 0, 5, 46, 'F');
+
+    // Title
+    doc.setTextColor(...WHITE);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(labelMap.reportTitle[currentReportType], margin + 4, 16);
+
+    // Subtitle line
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...GRAY);
+    doc.text(`${labelMap.barangay} ${BRGY}  ·  ${labelMap.municipality}`, margin + 4, 24);
+
+    // Outbreak badge if applicable
+    if (currentReportType === 'outbreak') {
+      doc.setFillColor(...RED);
+      doc.roundedRect(W - margin - 36, 10, 26, 9, 2, 2, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('⚠ URGENT', W - margin - 33, 16.5);
+    }
+
+    // Meta info row
+    doc.setFillColor(...SURFACE);
+    doc.rect(0, 46, W, 14, 'F');
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    const metaY = 55;
+    doc.text(`${labelMap.period}: ${from} – ${to}`, margin + 4, metaY);
+    doc.text(`${labelMap.preparedBy}: ${preparer}`, 90, metaY);
+    doc.text(`${labelMap.dateGenerated}: ${new Date().toLocaleDateString('en-PH')}`, W - margin - 50, metaY);
+
+    y = 72;
+
+    // ══════════════════════════════════════════════════
+    // STAT BOXES
+    // ══════════════════════════════════════════════════
+    const stats = [
+      { label: labelMap.totalCases, value: cases.length, color: BLUE },
+      { label: labelMap.confirmed, value: confirmed.length, color: GREEN },
+      { label: labelMap.pending, value: pending.length, color: GOLD },
+      { label: labelMap.severe, value: severe.length, color: RED },
+      { label: labelMap.riskLevel, value: riskLevel, color: riskColor },
+    ];
+    const boxW = (W - margin * 2 - 16) / 5;
+    stats.forEach((s, i) => {
+      const bx = margin + i * (boxW + 4);
+      doc.setFillColor(...SURFACE);
+      doc.roundedRect(bx, y, boxW, 22, 2, 2, 'F');
+      doc.setDrawColor(...s.color);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(bx, y, boxW, 22, 2, 2, 'S');
+      // Top color bar
+      doc.setFillColor(...s.color);
+      doc.roundedRect(bx, y, boxW, 2.5, 1, 1, 'F');
+      doc.setTextColor(...s.color);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(typeof s.value === 'number' ? 18 : 12);
+      doc.text(String(s.value), bx + boxW / 2, y + 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...GRAY);
+      doc.text(s.label, bx + boxW / 2, y + 20, { align: 'center' });
+    });
+    y += 28;
+
+    // ══════════════════════════════════════════════════
+    // SEVERITY BAR CHART (visual)
+    // ══════════════════════════════════════════════════
+    if (cases.length > 0) {
+      checkY(28);
+      doc.setFillColor(...SURFACE);
+      doc.roundedRect(margin, y, W - margin * 2, 22, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...WHITE);
+      doc.text(isFil ? 'DISTRIBUSYON NG KALUBHAAN' : 'SEVERITY DISTRIBUTION', margin + 4, y + 7);
+
+      const barData = [
+        { label: labelMap.mild, val: mild.length, color: GREEN },
+        { label: labelMap.moderate, val: moderate.length, color: ORANGE },
+        { label: labelMap.severe, val: severe.length, color: RED },
+      ];
+      const total = cases.length || 1;
+      const barAreaW = W - margin * 2 - 100;
+      let bx2 = margin + 95;
+      barData.forEach(b => {
+        const barLen = (b.val / total) * barAreaW;
+        doc.setFillColor(...b.color);
+        doc.roundedRect(bx2, y + 11, Math.max(barLen, 1), 6, 1, 1, 'F');
+        doc.setFontSize(7);
+        doc.setTextColor(...b.color);
+        doc.text(`${b.label}: ${b.val}`, bx2 + Math.max(barLen, 1) + 2, y + 16);
+        bx2 += barAreaW / 3 + 4;
+      });
+      y += 28;
+    }
+
+    // ══════════════════════════════════════════════════
+    // RECOMMENDATIONS (for outbreak type or if high risk)
+    // ══════════════════════════════════════════════════
+    if (currentReportType === 'outbreak' || riskLevel === 'HIGH' || riskLevel === 'MATAAS') {
+      checkY(38);
+      doc.setFillColor(60, 20, 20);
+      doc.setDrawColor(...RED);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(margin, y, W - margin * 2, 36, 2, 2, 'FD');
+      doc.setFillColor(...RED);
+      doc.roundedRect(margin, y, W - margin * 2, 8, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...WHITE);
+      doc.text(`⚠  ${labelMap.recommendations}`, margin + 5, y + 5.5);
+
+      const recs = isFil ? [
+        '1. Agad na iulat ang lahat ng suspected na kaso sa RHU para sa kumpirmasyon.',
+        '2. Magsagawa ng fogging sa mga apektadong purok nang may koordinasyon sa RHU.',
+        '3. Tiyaking malinis ang lahat ng lalagyan ng tubig sa barangay.',
+        '4. Ipaalala sa mga residente na magsuot ng matagal na damit at gumamit ng insect repellent.',
+        '5. Mag-organisa ng community clean-up at larval survey sa loob ng 48 oras.',
+      ] : [
+        '1. Immediately report all suspected cases to the RHU for confirmation and monitoring.',
+        '2. Coordinate with RHU to conduct fogging operations in affected puroks.',
+        '3. Enforce proper water container management and larviciding in the barangay.',
+        '4. Distribute advisories to residents — remind use of repellents and long-sleeved clothing.',
+        '5. Organize emergency community clean-up and larval survey within 48 hours.',
+      ];
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...LIGHT);
+      recs.forEach((r, i) => doc.text(r, margin + 5, y + 13 + i * 5.5));
+      y += 42;
+    }
+
+    // ══════════════════════════════════════════════════
+    // PATIENT CASE LIST TABLE
+    // ══════════════════════════════════════════════════
+    checkY(16);
+    doc.setFillColor(...SURFACE);
+    doc.roundedRect(margin, y, W - margin * 2, 8, 2, 2, 'F');
+    doc.setFillColor(...accentC);
+    doc.roundedRect(margin, y, W - margin * 2, 8, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...WHITE);
+    doc.text(labelMap.patientList, margin + 5, y + 5.5);
+    doc.setFontSize(8);
+    doc.text(`(${cases.length} ${isFil ? 'kaso' : 'cases'})`, W - margin - 5, y + 5.5, { align: 'right' });
+    y += 10;
+
+    if (cases.length === 0) {
+      checkY(12);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      doc.setTextColor(...GRAY);
+      doc.text(isFil ? 'Walang kaso sa panahong ito.' : 'No cases recorded in the selected period.', margin + 4, y + 6);
+      y += 14;
+    } else {
+      const tableBody = cases.map((c, idx) => [
+        idx + 1,
+        maskName(c.patient_name, privacy),
+        c.age ?? '—',
+        c.sex?.[0]?.toUpperCase() ?? '—',
+        c.onset_date ? c.onset_date.split('T')[0] : '—',
+        c.severity ?? '—',
+        c.status ?? '—',
+        (c.rhu_notes || '').slice(0, 40) || '—',
+      ]);
+
+      doc.autoTable({
+        startY: y,
+        head: [[
+          '#', labelMap.name, labelMap.age, labelMap.sex,
+          labelMap.onset, labelMap.severity, labelMap.status, labelMap.notes
+        ]],
+        body: tableBody,
+        styles: {
+          fontSize: 7.5, cellPadding: 2.5, textColor: [220, 228, 240],
+          fillColor: SURFACE, lineColor: [45, 55, 72], lineWidth: 0.3,
+          font: 'helvetica'
+        },
+        headStyles: {
+          fillColor: accentC, textColor: WHITE, fontStyle: 'bold',
+          fontSize: 8, halign: 'center'
+        },
+        alternateRowStyles: { fillColor: [22, 27, 34] },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 8 },
+          2: { halign: 'center', cellWidth: 10 },
+          3: { halign: 'center', cellWidth: 10 },
+          4: { cellWidth: 22 },
+          5: { halign: 'center', cellWidth: 20 },
+          6: { halign: 'center', cellWidth: 20 },
+          7: { cellWidth: 36 },
+        },
+        margin: { left: margin, right: margin },
+        theme: 'grid',
+        didParseCell(data) {
+          if (data.section === 'body') {
+            const val = data.cell.raw;
+            if (val === 'Confirmed' || val === 'Mild') data.cell.styles.textColor = GREEN;
+            else if (val === 'Pending' || val === 'Moderate') data.cell.styles.textColor = ORANGE;
+            else if (val === 'Severe') data.cell.styles.textColor = RED;
+          }
+        },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    // ══════════════════════════════════════════════════
+    // SIGNATURE BLOCK
+    // ══════════════════════════════════════════════════
+    checkY(36);
+    y += 4;
+    doc.setFillColor(...SURFACE);
+    doc.roundedRect(margin, y, W - margin * 2, 32, 2, 2, 'F');
+
+    const sigCols = [
+      { label: isFil ? 'Inihanda ni' : 'Prepared By', name: preparer, role: isFil ? 'Barangay Health Worker' : 'Barangay Health Worker' },
+      { label: isFil ? 'Napatunayan ni' : 'Noted By', name: '', role: isFil ? 'Punong Barangay' : 'Barangay Captain' },
+      { label: isFil ? 'Natanggap ng' : 'Received By', name: '', role: isFil ? 'Rural Health Unit' : 'Rural Health Unit — Janiuay' },
+    ];
+    const colW2 = (W - margin * 2) / 3;
+    sigCols.forEach((s, i) => {
+      const sx = margin + i * colW2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...GRAY);
+      doc.text(s.label + ':', sx + 6, y + 7);
+      // Signature line
+      doc.setDrawColor(...GRAY);
+      doc.setLineWidth(0.3);
+      doc.line(sx + 6, y + 19, sx + colW2 - 8, y + 19);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...WHITE);
+      if (s.name) doc.text(s.name, sx + colW2 / 2, y + 17, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...GRAY);
+      doc.text(s.role, sx + colW2 / 2, y + 24, { align: 'center' });
+      // Vertical divider
+      if (i < 2) {
+        doc.setDrawColor(45, 55, 72);
+        doc.line(sx + colW2, y + 4, sx + colW2, y + 30);
+      }
+    });
+    y += 38;
+
+    // ══════════════════════════════════════════════════
+    // FOOTER on every page
+    // ══════════════════════════════════════════════════
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let pg = 1; pg <= pageCount; pg++) {
+      doc.setPage(pg);
+      doc.setFillColor(...SURFACE);
+      doc.rect(0, pageH - 12, W, 12, 'F');
+      doc.setFillColor(...accentC);
+      doc.rect(0, pageH - 12, 3, 12, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...GRAY);
+      doc.text(labelMap.footer, margin, pageH - 5);
+      doc.text(`${pg} / ${pageCount}`, W - margin, pageH - 5, { align: 'right' });
+    }
+
+    // ── Save ──────────────────────────────────────────
+    const typeLabel = { weekly: 'Weekly', monthly: 'Monthly', outbreak: 'Outbreak' }[currentReportType];
+    const fname = `DengueReport-Brgy${BRGY.replace(/\s/g, '')}-${typeLabel}-${from.replace(/-/g,'')}-to-${to.replace(/-/g,'')}.pdf`;
+    doc.save(fname);
+
+    // Log it
+    const logEl = document.getElementById('reports-log');
+    const stamp = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+    const entry = document.createElement('div');
+    entry.className = 'alert-item';
+    const typeColors = { weekly: 'var(--info)', monthly: 'var(--safe)', outbreak: 'var(--accent)' };
+    entry.innerHTML = `
+      <div class="alert-dot" style="background:${typeColors[currentReportType]};box-shadow:0 0 6px ${typeColors[currentReportType]}"></div>
+      <div>
+        <div class="alert-msg"><strong>${typeLabel} Report</strong> — ${cases.length} cases · ${from} to ${to}</div>
+        <div class="alert-time">${stamp} · ${fname}</div>
+      </div>
+      <div style="margin-left:auto;font-size:11px;color:var(--safe)">✓ Downloaded</div>
+    `;
+    if (logEl.querySelector('.empty-state')) logEl.innerHTML = '';
+    logEl.prepend(entry);
+    showToast(`✅ PDF generated: ${fname}`);
+
+  } catch (err) {
+    console.error('PDF generation error:', err);
+    showToast('⚠ PDF generation failed: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.querySelector('span').textContent = '⬇ Generate PDF';
+  }
+}
+
+// ── END AUTO REPORTS ─────────────────────────────────────────
+
+loadDashboard();
+</script>
+</body>
+</html>

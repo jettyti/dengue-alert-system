@@ -1,0 +1,2641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dengue Alert — RHU Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--surface2:#1f2937;--border:#2d3748;
+    --text:#e2e8f0;--muted:#718096;--accent:#f56565;--accent2:#fc8181;
+    --warn:#ed8936;--safe:#48bb78;--info:#63b3ed;--yellow:#ecc94b;
+    --critical-bg:rgba(245,101,101,0.12);--warn-bg:rgba(237,137,54,0.12);
+    --safe-bg:rgba(72,187,120,0.12);--info-bg:rgba(99,179,237,0.12);
+    --radius:10px;--shadow:0 4px 24px rgba(0,0,0,0.4);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.6;display:flex;height:100vh;overflow:hidden}
+
+  /* SIDEBAR */
+  .sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+  .sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+  .logo-title{font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--accent)}
+  .logo-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.3}
+  .nav-section{padding:12px 12px 0}
+  .nav-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 8px;margin-bottom:4px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--muted);font-size:13.5px;font-weight:500;transition:all .15s;margin-bottom:2px;position:relative}
+  .nav-item:hover{background:var(--surface2);color:var(--text)}
+  .nav-item.active{background:var(--critical-bg);color:var(--accent)}
+  .nav-item .icon{font-size:16px;min-width:18px;text-align:center}
+  .badge{margin-left:auto;background:var(--accent);color:white;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px;min-width:18px;text-align:center}
+  .badge.warn{background:var(--warn)}.badge.info{background:var(--info)}
+  .sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--border)}
+  .user-chip{display:flex;align-items:center;gap:10px}
+  .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--warn));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0}
+  .user-info .name{font-size:13px;font-weight:600;color:var(--text)}
+  .user-info .role{font-size:11px;color:var(--muted)}
+  .logout-btn{margin-top:10px;width:100%;padding:7px;border-radius:7px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;transition:all .15s}
+  .logout-btn:hover{background:var(--surface2);color:var(--text)}
+
+  /* MAIN */
+  .main{flex:1;overflow-y:auto;display:none;flex-direction:column}
+  .main.active{display:flex}
+  .top-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:10}
+  .page-title{font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--text)}
+  .page-sub{font-size:12px;color:var(--muted);margin-top:1px}
+  .top-actions{display:flex;gap:8px}
+  .btn{padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:'DM Sans',sans-serif}
+  .btn-primary{background:var(--accent);color:white}.btn-primary:hover{background:var(--accent2)}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--border)}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);background:var(--surface2)}
+  .btn-safe{background:var(--safe);color:#064e3b}.btn-warn{background:var(--warn);color:#7c2d12}
+  .btn-info{background:var(--info);color:#0c1a2e}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .content{padding:24px;flex:1}
+  .two-col{display:grid;grid-template-columns:1fr 380px;gap:16px;margin-bottom:16px}
+  .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .card-title{font-size:13.5px;font-weight:600;color:var(--text)}
+  .card-sub{font-size:11px;color:var(--muted);margin-top:1px}
+  .card-body{padding:18px}
+
+  /* Stats */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:transform .15s}
+  .stat-card:hover{transform:translateY(-2px)}
+  .stat-label{font-size:11.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+  .stat-value{font-family:'Fraunces',serif;font-size:32px;font-weight:600;margin:4px 0 2px;line-height:1}
+  .stat-change{font-size:11px;color:var(--muted)}
+  .stat-card.critical .stat-value{color:var(--accent)}
+  .stat-card.warn .stat-value{color:var(--warn)}
+  .stat-card.safe .stat-value{color:var(--safe)}
+  .stat-card.info .stat-value{color:var(--info)}
+
+  /* Alert banner */
+  .alert-banner{background:linear-gradient(135deg,rgba(245,101,101,0.18),rgba(237,137,54,0.1));border:1px solid rgba(245,101,101,0.4);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:20px;animation:pulse-border 2s ease infinite}
+  @keyframes pulse-border{0%,100%{border-color:rgba(245,101,101,0.4)}50%{border-color:rgba(245,101,101,0.8)}}
+
+  /* Table */
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse}
+  thead th{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+  tbody tr{border-bottom:1px solid rgba(45,55,72,0.5);transition:background .1s}
+  tbody tr:hover{background:var(--surface2)}
+  tbody td{padding:11px 14px;font-size:13px}
+
+  /* Chips */
+  .chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.03em}
+  .chip.high{background:var(--critical-bg);color:var(--accent);border:1px solid rgba(245,101,101,0.3)}
+  .chip.medium{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(237,137,54,0.3)}
+  .chip.low{background:var(--safe-bg);color:var(--safe);border:1px solid rgba(72,187,120,0.3)}
+  .chip.info-chip{background:var(--info-bg);color:var(--info);border:1px solid rgba(99,179,237,0.3)}
+  .chip.pending{background:rgba(236,201,75,0.12);color:var(--yellow);border:1px solid rgba(236,201,75,0.3)}
+
+  /* Progress */
+  .prog-wrap{display:flex;align-items:center;gap:8px}
+  .prog-bar{flex:1;height:6px;background:var(--surface2);border-radius:99px;overflow:hidden}
+  .prog-fill{height:100%;border-radius:99px;transition:width .8s ease}
+  .prog-fill.high{background:var(--accent)}.prog-fill.medium{background:var(--warn)}.prog-fill.low{background:var(--safe)}
+  .prog-val{font-size:11px;color:var(--muted);min-width:28px;text-align:right;font-family:'DM Mono',monospace}
+
+  /* Alert feed */
+  .alert-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(45,55,72,0.5)}
+  .alert-item:last-child{border-bottom:none}
+  .alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+  .alert-dot.high{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+  .alert-dot.medium{background:var(--warn)}.alert-dot.low{background:var(--safe)}
+  .alert-msg{font-size:12.5px;color:var(--text);line-height:1.4}
+  .alert-time{font-size:11px;color:var(--muted);margin-top:2px;font-family:'DM Mono',monospace}
+
+  /* Risk Map */
+  #janiuay-map{height:100%;min-height:380px;border-radius:0;z-index:1}
+  .leaflet-popup-content-wrapper{background:#161b22;color:#e2e8f0;border:1px solid #2d3748;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5)}
+  .leaflet-popup-tip{background:#161b22}
+  .leaflet-popup-content{margin:12px 16px;font-size:13px}
+
+  /* Glowing risk markers */
+  .glow-marker{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .glow-marker .glow-halo{
+    position:absolute; border-radius:50%; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    filter:blur(6px);
+    animation:glow-pulse 2.4s ease-in-out infinite;
+    pointer-events:none;
+  }
+  .glow-marker .glow-core{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    border-radius:50%;
+    box-shadow:0 0 6px 1px rgba(0,0,0,0.35);
+    pointer-events:auto;
+  }
+  @keyframes glow-pulse{
+    0%   { opacity:.55; transform:translate(-50%,-50%) scale(0.85); }
+    50%  { opacity:.9;  transform:translate(-50%,-50%) scale(1.15); }
+    100% { opacity:.55; transform:translate(-50%,-50%) scale(0.85); }
+  }
+  /* Barangay list */
+  .brgy-list-item{border-bottom:1px solid var(--border);overflow:hidden}
+  .brgy-list-item:last-child{border-bottom:none}
+  .brgy-row{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;transition:background .15s}
+  .brgy-row:hover{background:var(--surface2)}
+  .brgy-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .brgy-dot.high{background:#f56565;box-shadow:0 0 6px #f56565}
+  .brgy-dot.medium{background:#ed8936;box-shadow:0 0 6px #ed8936}
+  .brgy-dot.low{background:#48bb78}
+  .brgy-chevron{margin-left:auto;color:var(--muted);font-size:12px;transition:transform .2s}
+  .brgy-chevron.open{transform:rotate(90deg)}
+  .brgy-cases{display:none;background:var(--surface2);padding:0 12px}
+  .brgy-cases.open{display:block}
+  .case-row{padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:6px;transition:background .15s}
+  .case-row:last-child{border-bottom:none}
+  .case-row:hover{background:var(--surface)}
+  .case-detail{display:none;background:var(--bg);border-radius:8px;padding:14px;margin:0 0 8px;border:1px solid var(--border)}
+  .case-detail.open{display:block}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .detail-field{font-size:12px}
+  .detail-label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+  .detail-val{color:var(--text);margin-top:2px;font-size:13px}
+  .tile-name{font-size:12.5px;font-weight:600;margin-bottom:6px}
+  .tile-count{font-family:'Fraunces',serif;font-size:24px;font-weight:600;margin-bottom:2px}
+  .tile-sub{font-size:10.5px;color:var(--muted)}
+
+  /* Email composer */
+  .recipient-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .rec-tab{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted);transition:all .15s;font-family:'DM Sans',sans-serif}
+  .rec-tab.active{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+  .email-preview{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:16px;font-size:13px;color:var(--text);min-height:120px;line-height:1.6}
+
+  /* Form */
+  .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .form-label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.03em}
+  .form-input{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;transition:border-color .15s;outline:none;width:100%;color-scheme:dark}
+  .form-input:focus{border-color:var(--accent)}
+  body.light-mode .form-input{color-scheme:light}
+  .form-input option{background:var(--surface2)}
+  textarea.form-input{resize:vertical;min-height:80px}
+  .checkbox-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .checkbox-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12.5px;transition:all .15s}
+  .checkbox-item:hover{border-color:var(--accent);background:var(--critical-bg)}
+  .checkbox-item input{accent-color:var(--accent)}
+  .severity-btns{display:flex;gap:8px}
+  .sev-btn{flex:1;padding:8px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted);transition:all .15s;font-family:'DM Sans',sans-serif}
+
+  /* Report items */
+  .report-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(45,55,72,0.5)}
+  .report-item:last-child{border-bottom:none}
+  .report-icon{font-size:22px;margin-right:12px}
+  .report-name{font-size:13px;font-weight:600;color:var(--text)}
+  .report-desc{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* History filters */
+  .history-filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+  .modal.open{display:flex}
+  .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:520px;width:90%;box-shadow:var(--shadow);animation:modal-in .2s ease}
+  @keyframes modal-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+  .modal-title{font-family:'Fraunces',serif;font-size:18px;margin-bottom:12px}
+  .modal-body{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:18px}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+
+  /* Toast */
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 18px;font-size:13px;color:var(--text);box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:all .3s;pointer-events:none;z-index:9999;max-width:340px}
+  .toast.show{opacity:1;transform:translateY(0)}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+  /* Empty state */
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+  .empty-state .icon{font-size:32px;margin-bottom:10px}
+
+  .section-divider{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:14px}
+
+  .pending-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(236,201,75,0.12);color:var(--yellow);border:1px solid rgba(236,201,75,0.3);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:700}
+
+  /* ── LIGHT MODE ─────────────────────────────────────────── */
+  body.light-mode {
+    --bg:#f0f4f8;--surface:#ffffff;--surface2:#e8edf3;--border:#cbd5e0;
+    --text:#1a202c;--muted:#718096;--accent:#e53e3e;--accent2:#fc8181;
+    --warn:#dd6b20;--safe:#276749;--info:#2b6cb0;--yellow:#b7791f;
+    --critical-bg:rgba(229,62,62,0.08);--warn-bg:rgba(221,107,32,0.08);
+    --safe-bg:rgba(39,103,73,0.08);--info-bg:rgba(43,108,176,0.08);
+    --shadow:0 4px 24px rgba(0,0,0,0.1);
+  }
+  body.light-mode .leaflet-popup-content-wrapper{background:#fff;color:#1a202c;border-color:#cbd5e0}
+  body.light-mode .leaflet-popup-tip{background:#fff}
+  body.light-mode .leaflet-tile-pane{filter:brightness(1)}
+
+  /* ── HAMBURGER / MOBILE NAV ─────────────────────────────── */
+  .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+  .hamburger span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:all .25s}
+  .hamburger.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+  .hamburger.open span:nth-child(2){opacity:0}
+  .hamburger.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:149;backdrop-filter:blur(2px)}
+  .sidebar-overlay.open{display:block}
+
+  /* ── RESPONSIVE ─────────────────────────────────────────── */
+  @media(max-width:1100px){
+    .stats-grid{grid-template-columns:repeat(2,1fr)}
+    .two-col{grid-template-columns:1fr}
+    .three-col{grid-template-columns:1fr 1fr}
+    #page-riskmap .content{grid-template-columns:1fr!important;height:auto!important;overflow:visible!important}
+    #page-riskmap{height:auto!important;overflow:auto!important}
+    #janiuay-map{min-height:340px!important}
+    #page-riskmap .card{min-height:340px}
+    #page-riskmap .card:last-child{min-height:300px;max-height:500px}
+    #page-settings .content > div{grid-template-columns:1fr!important}
+  }
+  @media(max-width:768px){
+    .hamburger{display:flex}
+    .sidebar{position:fixed;left:-260px;top:0;height:100vh;z-index:150;transition:left .25s ease;box-shadow:4px 0 20px rgba(0,0,0,0.4)}
+    .sidebar.mobile-open{left:0}
+    body{display:block;overflow:auto}
+    .main{height:auto;min-height:100vh;display:none;flex-direction:column}
+    .main.active{display:flex}
+    .top-bar{padding:12px 16px 12px 60px}
+    .content{padding:16px}
+    .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+    .two-col{grid-template-columns:1fr;gap:12px}
+    .three-col{grid-template-columns:1fr;gap:12px}
+    .modal-card{width:95%;padding:18px}
+    .top-actions{gap:6px}
+    .top-actions .btn{padding:6px 10px;font-size:11.5px}
+    .toast{bottom:16px;right:16px;left:16px;max-width:none}
+    .recipient-tabs{gap:4px}
+    .rec-tab{font-size:11px;padding:4px 10px}
+    .checkbox-grid{grid-template-columns:1fr}
+    .severity-btns{flex-direction:column}
+    .history-filters{gap:4px}
+    #page-settings .content > div{grid-template-columns:1fr!important}
+  }
+  @media(max-width:480px){
+    .stats-grid{grid-template-columns:1fr}
+    .page-title{font-size:17px}
+    .stat-value{font-size:26px}
+    table{font-size:12px}
+    thead th,tbody td{padding:8px 10px}
+  }
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-title">🦟 Dengue Alert</div>
+    <div class="logo-sub">RHU — Municipality of Janiuay<br>Central Monitoring System</div>
+  </div>
+
+  <div class="nav-section" style="margin-top:8px">
+    <div class="nav-label">Monitoring</div>
+    <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="2" width="4" height="18" rx="1"/></svg></span> Dashboard</div>
+    <div class="nav-item" data-page="riskmap" onclick="showPage('riskmap')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.5 7-13a7 7 0 1 0-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="8" r="2.5"/></svg></span> Risk Map</div>
+    <div class="nav-item" data-page="alerts" onclick="showPage('alerts')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></span> Alert Center <span class="badge" id="alert-badge" style="display:none">0</span></div>
+  </div>
+
+  <div class="nav-section" style="margin-top:4px">
+    <div class="nav-label">Operations</div>
+    <div class="nav-item" data-page="pending" onclick="showPage('pending')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 6.8 5h10.4L20 13"/><path d="M4 13v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/><path d="M4 13h4.5l1.2 2h4.6l1.2-2H20"/></svg></span> Pending Cases <span class="badge warn" id="pending-badge" style="display:none">0</span></div>
+    <div class="nav-item" data-page="inbox" onclick="showPage('inbox')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/></svg></span> BHW Messages <span class="badge info" id="inbox-badge" style="display:none">0</span></div>
+    <div class="nav-item" data-page="emailcomposer" onclick="showPage('emailcomposer')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></span> SMS Composer</div>
+    <div class="nav-item" data-page="reports" onclick="showPage('reports')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v11a1.5 1.5 0 0 1-1.5 1.5h-10.5a1.5 1.5 0 0 1-1.5-1.5V4.5A1.5 1.5 0 0 1 7 3z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16h7M8.5 19h4"/></svg></span> Auto Reports</div>
+    <div class="nav-item" data-page="history" onclick="showPage('history')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 8.5A8 8 0 1 1 4 13"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4.5l3 2"/></svg></span> Case History</div>
+  </div>
+
+  <div class="nav-section" style="margin-top:4px">
+    <div class="nav-label">Admin</div>
+    <div class="nav-item" data-page="accounts" onclick="showPage('accounts')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.3"/><path d="M3 20c0-3.7 2.5-6.2 6-6.2s6 2.5 6 6.2"/><path d="M15.8 6.3a3.1 3.1 0 0 1 0 6"/><path d="M16.3 13.9c2.5.4 4.4 2.6 4.7 6"/></svg></span> BHW Accounts <span class="badge warn" id="accounts-badge" style="display:none">0</span></div>
+    <div class="nav-item" data-page="settings" onclick="showPage('settings')"><span class="icon"><svg width="16" height="16" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.6M7.1 15.3l-1.5 1.6M18.4 18.4l-1.5-1.6M7.1 8.7 5.6 7.1"/></svg></span> Settings</div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="avatar" id="sidebar-avatar">RH</div>
+      <div class="user-info">
+        <div class="name" id="sidebar-name">RHU Officer</div>
+        <div class="role">Rural Health Unit</div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="SESSION.logout()">← Log Out</button>
+  </div>
+</nav>
+
+<!-- ===================== DASHBOARD ===================== -->
+<div class="main active" id="page-dashboard">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Municipal Overview Dashboard</div>
+      <div class="page-sub" id="dash-date">Real-time dengue situation — Updated just now</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-secondary" onclick="loadAll()">↺ Refresh</button>
+      <button class="btn btn-primary" onclick="showPage('emailcomposer')">✉️ Send Alert</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="alert-banner" id="alert-banner">
+      <div style="font-size:22px" id="banner-icon">🚨</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em" id="banner-title">Loading...</div>
+        <div style="font-size:13px;color:var(--text)" id="banner-desc">Analyzing barangay data...</div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card critical"><div class="stat-label">Active Cases</div><div class="stat-value" id="stat-cases">—</div><div class="stat-change">Confirmed &amp; not yet resolved</div></div>
+      <div class="stat-card warn"><div class="stat-label">High-Risk Barangays</div><div class="stat-value" id="stat-highrisk">—</div><div class="stat-change">Out of 20 monitored</div></div>
+      <div class="stat-card info"><div class="stat-label">SMS Dispatched</div><div class="stat-value" id="stat-emails">—</div><div class="stat-change">This month</div></div>
+      <div class="stat-card safe"><div class="stat-label">Pending Review</div><div class="stat-value" id="stat-pending">—</div><div class="stat-change">Awaiting RHU action</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Barangay Risk Monitor</div><div class="card-sub">Active cases vs. outbreak threshold (5 cases)</div></div>
+          <span class="chip high">Live</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Barangay</th><th>Active Cases</th><th>Threshold %</th><th>Risk</th><th>Action</th></tr></thead>
+            <tbody id="brgy-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Recent Alerts</div><div class="card-sub">Intelligent monitoring feed</div></div>
+        <div class="card-body" style="max-height:400px;overflow-y:auto" id="alert-feed"></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Weekly Case Trend</div><div class="card-sub">Past 8 weeks</div></div>
+        <div class="card-body"><div style="position:relative;height:180px"><canvas id="trendChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Cases by Barangay (Top 6)</div></div>
+        <div class="card-body"><div style="position:relative;height:180px"><canvas id="barChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- Recent submissions -->
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Recent Submissions from Barangays</div><div class="card-sub">Latest cases awaiting or recently reviewed</div></div>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="showPage('pending')">Review Pending →</button>
+      </div>
+      <div id="recent-submissions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PENDING CASES ===================== -->
+<div class="main" id="page-pending">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Pending Cases</div>
+      <div class="page-sub">Cases submitted by barangays awaiting RHU review and confirmation</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-secondary" onclick="loadPending()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient</th><th>Age/Sex</th><th>Barangay</th><th>Onset</th><th>Severity</th><th>Symptoms</th><th>Submitted</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pending-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== RISK MAP ===================== -->
+<div class="main" id="page-riskmap" style="flex-direction:column;overflow:hidden">
+  <div class="top-bar">
+    <div><div class="page-title">Barangay Risk Map</div><div class="page-sub">Live dengue risk map of Janiuay, Iloilo</div></div>
+    <div class="top-actions">
+      <span class="chip high" style="margin-right:4px">⬤ High</span>
+      <span class="chip medium" style="margin-right:4px">⬤ Medium</span>
+      <span class="chip low">⬤ Low</span>
+      <button class="btn btn-secondary" style="margin-left:8px" onclick="loadRiskMap()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content" style="display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:stretch;flex:1;min-height:0;overflow:hidden">
+    <!-- LEFT: Real Map -->
+    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+      <div class="card-header" style="padding:14px 18px 12px;flex-shrink:0">
+        <div class="card-title">Janiuay, Iloilo — Live Risk Map</div>
+        <div class="card-sub">Color indicates risk level · click a dot for details</div>
+      </div>
+      <div id="janiuay-map" style="flex:1;min-height:0"></div>
+      <div style="padding:10px 18px 14px;display:flex;gap:16px;font-size:12px;color:var(--muted);flex-shrink:0">
+        <span>⬤ <span style="color:#f56565">High ≥5 cases</span></span>
+        <span>⬤ <span style="color:#ed8936">Medium 3–4 cases</span></span>
+        <span>⬤ <span style="color:#48bb78">Low 1–2 cases</span></span>
+      </div>
+    </div>
+    <!-- RIGHT: Barangay list with expandable cases -->
+    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0">
+      <div class="card-header" style="padding:14px 18px 12px;flex-shrink:0">
+        <div class="card-title">Barangay Cases</div>
+        <div class="card-sub">Tap a barangay to see submitted cases</div>
+      </div>
+      <div id="brgy-case-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ALERT CENTER ===================== -->
+<div class="main" id="page-alerts">
+  <div class="top-bar">
+    <div><div class="page-title">Alert Center</div><div class="page-sub">Intelligent monitoring mechanism alerts</div></div>
+    <div class="top-actions">
+      <button class="btn btn-secondary" onclick="loadAlerts()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Active Alerts</div><div class="card-sub">Barangays requiring immediate attention</div></div>
+      <div style="padding:8px 0" id="alert-center-list">
+        <div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></div>Loading alerts...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SMS COMPOSER ===================== -->
+<!-- ===================== PAGE: BHW INBOX ===================== -->
+<div class="main" id="page-inbox">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">BHW Messages</div>
+      <div class="page-sub">Messages and field updates from Barangay Health Workers</div>
+    </div>
+    <div class="top-actions">
+      <select class="form-input" style="width:180px;padding:6px 10px;font-size:12px" id="inbox-filter-brgy" onchange="filterInbox()">
+        <option value="">All Barangays</option>
+      </select>
+      <select class="form-input" style="width:140px;padding:6px 10px;font-size:12px" id="inbox-filter-type" onchange="filterInbox()">
+        <option value="">All Types</option>
+        <option value="fogging">💨 Fogging</option>
+        <option value="cleanup">🧹 Clean-up</option>
+        <option value="update">📋 Update</option>
+        <option value="concern">⚠️ Concern</option>
+        <option value="supply">📦 Supply</option>
+      </select>
+      <select class="form-input" style="width:130px;padding:6px 10px;font-size:12px" id="inbox-filter-status" onchange="filterInbox()">
+        <option value="">All Status</option>
+        <option value="unread">Unread</option>
+        <option value="read">Read</option>
+      </select>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="loadInbox()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content" style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Stats summary bar -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="inbox-stats">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;color:var(--accent)" id="inbox-stat-unread">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Unread</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;color:var(--info)" id="inbox-stat-total">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Total</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;color:var(--warn)" id="inbox-stat-urgent">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Urgent/Critical</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:600;color:var(--safe)" id="inbox-stat-fogging">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Fogging Reports</div>
+      </div>
+    </div>
+
+    <!-- Message list (full-width, expandable rows) -->
+    <div class="card" style="overflow:hidden">
+      <div class="card-header">
+        <div class="card-title">📬 Inbox</div>
+        <div class="card-sub" id="inbox-count-label">Loading messages...</div>
+      </div>
+      <div id="inbox-list">
+        <div class="empty-state" style="padding:40px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"/></svg></div>Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main" id="page-emailcomposer">
+  <div class="top-bar">
+    <div><div class="page-title">SMS Composer</div><div class="page-sub">Send dengue advisories, warnings, and intervention notices via SMS</div></div>
+  </div>
+  <div class="content">
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Compose Advisory SMS</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Recipients</label>
+            <div class="recipient-tabs">
+              <button class="rec-tab active" onclick="setRecipient(this,'all')">All Barangays</button>
+              <button class="rec-tab" onclick="setRecipient(this,'highrisk')">High-Risk Only</button>
+              <button class="rec-tab" onclick="setRecipient(this,'specific')">Specific Barangay</button>
+            </div>
+            <div id="brgy-select-wrap" style="display:none;margin-top:6px">
+              <select class="form-input" id="email-brgy-target">
+                <option value="">Select barangay...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">SMS Type</label>
+            <select class="form-input" id="email-type" onchange="updateEmailPreview()">
+              <option value="prevention">Prevention Advisory</option>
+              <option value="warning">Outbreak Warning</option>
+              <option value="fogging">Fogging Schedule</option>
+              <option value="education">Health Education Bulletin</option>
+              <option value="intervention">Intervention Update</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Language</label>
+            <select class="form-input" id="email-lang" onchange="updateEmailPreview()">
+              <option value="en">English</option>
+              <option value="fil">Filipino</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Message Header <span class="field-hint" style="color:var(--muted);font-weight:400">(prepended to the SMS text)</span></label>
+            <input type="text" class="form-input" id="email-subject" placeholder="Subject...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Message Body</label>
+            <textarea class="form-input" id="email-body" rows="8" oninput="syncPreview()" style="min-height:160px"></textarea>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-primary" id="send-email-btn" onclick="sendEmail()">📤 Send Now</button>
+            <button class="btn btn-ghost" onclick="updateEmailPreview()">👁 Preview</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+          <div class="card-header">
+            <div><div class="card-title">SMS Preview</div></div>
+          </div>
+          <div class="card-body">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+              <strong>To:</strong> <span id="preview-to">All registered patients</span><br>
+              <strong>Header:</strong> <span id="preview-subject">—</span>
+            </div>
+            <div class="email-preview" id="email-preview-body" style="white-space:pre-wrap;font-size:12px">Click Preview to see message...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">SMS Log</div><div class="card-sub">Recently sent</div></div>
+          <div id="email-log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== REPORTS ===================== -->
+<div class="main" id="page-reports">
+  <div class="top-bar">
+    <div><div class="page-title">Automated Reports</div><div class="page-sub">Generate and download official PDF reports for the municipal health office</div></div>
+  </div>
+  <div class="content">
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+
+      <!-- Left: report selector -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="card">
+          <div class="card-header"><div class="card-title">📁 Report Templates</div></div>
+          <div class="card-body" style="padding:10px 12px" id="report-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">⚙️ Options</div></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+            <div>
+              <label class="form-label">Date Range</label>
+              <select class="form-input" id="report-range" onchange="refreshReportPreview()" style="font-size:12.5px">
+                <option value="7">Last 7 days</option>
+                <option value="14" selected>Last 14 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 3 months</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Prepared By</label>
+              <input type="text" class="form-input" id="report-preparer" placeholder="e.g. Dr. R. Hernandez" style="font-size:12.5px">
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="printReport()">🖨️ Print / Save as PDF</button>
+            <button class="btn btn-secondary" style="width:100%;font-size:12px" onclick="exportAllCSV()">↓ Export Raw Data (CSV)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: live preview -->
+      <div class="card" style="overflow:hidden">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <div><div class="card-title">📄 Report Preview</div><div class="card-sub">Print or Ctrl+P to save as PDF</div></div>
+          <button class="btn btn-ghost" style="font-size:12px" onclick="refreshReportPreview()">↺ Refresh</button>
+        </div>
+        <div id="report-preview-wrap" style="background:#f5f5f5;padding:16px;min-height:500px;overflow-y:auto">
+          <div style="text-align:center;padding:60px;color:#9ca3af">Select a report template to preview</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CASE HISTORY ===================== -->
+<div class="main" id="page-history">
+  <div class="top-bar">
+    <div><div class="page-title">Case History</div><div class="page-sub">All recorded dengue cases across the municipality</div></div>
+    <div class="top-actions">
+      <input type="text" class="form-input" style="width:200px" placeholder="Search cases..." id="search-cases" oninput="filterHistory()">
+      <button class="btn btn-ghost" style="font-size:12px" onclick="exportCSV()">↓ CSV</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="history-filters" style="margin-bottom:14px">
+      <button class="rec-tab active" onclick="filterByStatus(this,'all')">All</button>
+      <button class="rec-tab" onclick="filterByStatus(this,'Pending')">Pending</button>
+      <button class="rec-tab" onclick="filterByStatus(this,'Confirmed')">Confirmed</button>
+      <button class="rec-tab" onclick="filterByStatus(this,'Rejected')">Rejected</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Patient</th><th>Age/Sex</th><th>Barangay</th><th>Onset Date</th><th>Severity</th><th>Symptoms</th><th>Status</th><th>Reported</th><th>Actions</th></tr></thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SETTINGS ===================== -->
+<div class="main" id="page-accounts">
+  <div class="top-bar">
+    <div>
+      <div class="page-title">BHW Account Management</div>
+      <div class="page-sub">Review and approve Barangay Health Worker account registrations</div>
+    </div>
+    <div class="top-actions">
+      <select class="form-input" style="width:160px;padding:6px 10px;font-size:12px" id="acc-filter-status" onchange="filterAccounts()">
+        <option value="">All Status</option>
+        <option value="pending">⏳ Pending</option>
+        <option value="approved">✅ Approved</option>
+        <option value="rejected">❌ Rejected</option>
+      </select>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="loadAccounts()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Summary stats -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="stat-card warn">
+        <div class="stat-label">Pending Approval</div>
+        <div class="stat-value" id="acc-stat-pending">—</div>
+        <div class="stat-change">Awaiting review</div>
+      </div>
+      <div class="stat-card safe">
+        <div class="stat-label">Approved</div>
+        <div class="stat-value" id="acc-stat-approved">—</div>
+        <div class="stat-change">Active BHW accounts</div>
+      </div>
+      <div class="stat-card critical">
+        <div class="stat-label">Rejected</div>
+        <div class="stat-value" id="acc-stat-rejected">—</div>
+        <div class="stat-change">Not approved</div>
+      </div>
+    </div>
+
+    <!-- Accounts table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">👥 Registered BHW Accounts</div>
+        <div class="card-sub" id="acc-count-label">Loading...</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Barangay</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Registered</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="acc-table-body">
+            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Loading accounts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="main" id="page-settings">
+  <div class="top-bar">
+    <div><div class="page-title">System Settings</div><div class="page-sub">Configuration for Dengue Alert</div></div>
+  </div>
+  <div class="content">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Alert Thresholds</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Outbreak Threshold (active cases)</label>
+            <input type="number" class="form-input" value="5" id="s-threshold">
+          </div>
+          <div class="form-group">
+            <label class="form-label">High Risk Min. Cases</label>
+            <input type="number" class="form-input" value="5" id="s-high">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Medium Risk Min. Cases</label>
+            <input type="number" class="form-input" value="3" id="s-medium">
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">SMS Server (Semaphore API)</div></div>
+        <div class="card-body" style="font-size:12.5px;color:var(--muted);line-height:1.8">
+          <p>SMS is sent via the <strong style="color:var(--text)">Semaphore</strong> gateway — covers all PH networks (Globe, Smart, Sun, DITO) at ~₱0.50–0.56/SMS.</p>
+          <p style="margin-top:8px"><strong style="color:var(--text)">Step 1:</strong> Sign up free at <strong style="color:var(--text)">semaphore.co</strong> and copy your API key.</p>
+          <p style="margin-top:4px"><strong style="color:var(--text)">Step 2:</strong> Edit <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">server/.env</code> and set <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">SEMAPHORE_API_KEY</code> (and optionally a registered <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">SEMAPHORE_SENDER_NAME</code>).</p>
+          <p style="margin-top:4px"><strong style="color:var(--text)">Step 3:</strong> Run <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">cd server && npm install && node server.js</code></p>
+          <p style="margin-top:4px"><strong style="color:var(--text)">Step 4:</strong> Confirm <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">SMS_SERVER_URL</code> in <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">config.js</code> points at the running server.</p>
+          <div id="smtp-status" style="margin-top:10px;padding:8px 12px;border-radius:7px;background:var(--surface2);font-size:12px">Checking server status...</div>
+          <button class="btn btn-secondary" style="margin-top:10px" onclick="testEmailSMTP()">🧪 Test SMS Connection</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Firebase / Firestore Database</div></div>
+        <div class="card-body" style="font-size:12.5px;color:var(--muted);line-height:1.8">
+          <p>Database powered by <strong style="color:var(--text)">Google Firebase Firestore</strong>.</p>
+          <p style="margin-top:8px">Configured in <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">config.js</code> under <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">firebaseConfig</code>.</p>
+          <p style="margin-top:8px"><strong style="color:var(--text)">Collections:</strong> <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">dengue_cases</code>, <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">sms_logs</code>, <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">users</code> (BHW), <code style="color:var(--info);background:var(--surface2);padding:1px 5px;border-radius:4px">rhu_accounts</code> (RHU/Admin)</p>
+          <div id="db-status" style="margin-top:10px;padding:8px 12px;border-radius:7px;background:var(--surface2);font-size:12px">Checking Firestore status...</div>
+          <button class="btn btn-secondary" style="margin-top:10px" onclick="testFirestore()">🔌 Test Firestore Connection</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">About System</div></div>
+        <div class="card-body" style="font-size:12.5px;color:var(--muted);line-height:1.8">
+          <p><strong style="color:var(--text)">Dengue Alert v2.0</strong></p>
+          <p>Intelligent SMS-Based Prevention, Warning, and Intervention System with Barangay-Level Risk Monitoring</p>
+          <p style="margin-top:8px"><strong style="color:var(--text)">Municipality:</strong> Janiuay, Iloilo</p>
+          <p><strong style="color:var(--text)">Architecture:</strong> Client–Server (Barangay → RHU)</p>
+          <p><strong style="color:var(--text)">Database:</strong> Firebase Firestore (Google)</p>
+          <p><strong style="color:var(--text)">SMS:</strong> Semaphore SMS API</p>
+          <p><strong style="color:var(--text)">By:</strong> Perez Et.al · CC 208 Methods of Research in Computing</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">🎨 Appearance</div></div>
+        <div class="card-body">
+          <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Choose your preferred interface theme. Your preference is saved locally.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button id="theme-dark-btn" onclick="setTheme('dark')" class="btn btn-primary" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:8px">
+              🌙 Dark Mode
+            </button>
+            <button id="theme-light-btn" onclick="setTheme('light')" class="btn btn-secondary" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:8px">
+              ☀️ Light Mode
+            </button>
+          </div>
+          <div id="theme-status" style="margin-top:10px;font-size:12px;color:var(--muted)">Current: Dark Mode</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-title">Confirm Action</div>
+    <div class="modal-body" id="modal-body"></div>
+    <div id="modal-extra"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<!-- Scripts -->
+<script src="config.js"></script>
+<script>
+// ── SESSION CHECK ────────────────────────────────────────────
+const user = SESSION.require('rhu');
+document.getElementById('sidebar-name').textContent = user?.name || 'RHU Officer';
+document.getElementById('sidebar-avatar').textContent = (user?.name || 'R')[0].toUpperCase();
+document.getElementById('dash-date').textContent = 'Real-time dengue situation — ' + new Date().toLocaleString('en-PH');
+
+// Populate barangay dropdowns
+SYSTEM_CONFIG.barangays.forEach(b => {
+  const opt = document.createElement('option');
+  opt.value = b; opt.textContent = b;
+  document.getElementById('email-brgy-target').appendChild(opt);
+});
+
+// ── GLOBAL STATE ─────────────────────────────────────────────
+let allCases = [];
+let riskData = [];
+let emailLogs = [];
+let trendChart, barChart;
+let currentStatusFilter = 'all';
+let selectedBrgy = null;
+
+// ── PAGE NAV ─────────────────────────────────────────────────
+// ── UNREAD NOTIFICATION TRACKING ────────────────────────────
+let alertsSeen = false; // tracks if user has visited Alert Center
+
+function updateUnreadBadges(pendingCount, alertCount) {
+  const pendingEl = document.getElementById('pending-badge');
+  const alertEl   = document.getElementById('alert-badge');
+  if (pendingEl) { pendingEl.textContent = pendingCount; pendingEl.style.display = pendingCount > 0 ? '' : 'none'; }
+  if (alertEl)   { alertEl.textContent = alertCount; alertEl.style.display = (!alertsSeen && alertCount > 0) ? '' : 'none'; }
+}
+
+function showPage(id) {
+  closeSidebar();
+  document.querySelectorAll('.main').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const activeNav = document.querySelector(`.nav-item[data-page="${id}"]`);
+  if (activeNav) activeNav.classList.add('active');
+  // Clear badge when the corresponding page is opened
+  if (id === 'alerts')  { alertsSeen = true; const el = document.getElementById('alert-badge'); if (el) el.style.display = 'none'; }
+  if (id === 'pending') { const el = document.getElementById('pending-badge'); if (el) el.style.display = 'none'; }
+  if (id === 'dashboard') loadDashboard();
+  if (id === 'riskmap')   loadRiskMap();
+  if (id === 'alerts')    loadAlerts();
+  if (id === 'pending')   loadPending();
+  if (id === 'emailcomposer') { loadEmailLog(); updateEmailPreview(); }
+  if (id === 'inbox') loadInbox();
+  if (id === 'history')   loadHistory();
+  if (id === 'reports')   { renderReportList(); if (!allCases.length) loadAll().then(refreshReportPreview); else refreshReportPreview(); }
+  if (id === 'accounts')  { loadAccounts(); }
+  if (id === 'settings')  { updateSmtpStatus(); updateThemeUI(); }
+}
+
+// ── LOAD ALL ─────────────────────────────────────────────────
+async function loadAll() {
+  const [casesRes, riskRes, emailRes] = await Promise.all([
+    DB.getAllCases(),
+    DB.getBarangayRisk(),
+    DB.getSmsLogs(50)
+  ]);
+  allCases   = casesRes.data  || [];
+  riskData   = riskRes.data   || [];
+  emailLogs  = emailRes.data  || [];
+  loadDashboard();
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────
+async function loadDashboard() {
+  if (!allCases.length) await loadAll();
+
+  const confirmed = allCases.filter(c => c.status === 'Confirmed' && c.is_active !== false);
+  const pending   = allCases.filter(c => c.status === 'Pending');
+  const highRisk  = riskData.filter(r => r.risk === 'High');
+  const now = new Date(); const w14 = new Date(now); w14.setDate(now.getDate() - 14);
+
+  document.getElementById('stat-cases').textContent    = confirmed.length;
+  document.getElementById('stat-highrisk').textContent = highRisk.length;
+  document.getElementById('stat-emails').textContent   = emailLogs.reduce((a,e) => a + (e.recipient_count||1), 0);
+  document.getElementById('stat-pending').textContent  = pending.length;
+
+  // Unread notification badges — show/hide based on count
+  updateUnreadBadges(pending.length, highRisk.length);
+
+  // Banner
+  const banner = document.getElementById('alert-banner');
+  if (highRisk.length > 0) {
+    document.getElementById('banner-icon').textContent  = '🚨';
+    document.getElementById('banner-title').style.color = 'var(--accent)';
+    document.getElementById('banner-title').textContent = `⚠ ALERT LEVEL: HIGH — ${highRisk.length} Barangay${highRisk.length>1?'s':''} in Outbreak Risk`;
+    document.getElementById('banner-desc').textContent  = `Barangays ${highRisk.map(r=>r.barangay).join(', ')} have exceeded the ${SYSTEM_CONFIG.outbreakThreshold}-case active threshold.`;
+  } else {
+    document.getElementById('banner-icon').textContent  = '✅';
+    document.getElementById('banner-title').style.color = 'var(--safe)';
+    document.getElementById('banner-title').textContent = '✅ SITUATION: STABLE — No barangay has exceeded the outbreak threshold';
+    document.getElementById('banner-desc').textContent  = 'Continue routine monitoring and prevention activities across all barangays.';
+  }
+
+  // Barangay table
+  const top = [...riskData].sort((a,b) => b.cases - a.cases).slice(0, 10);
+  const tbody = document.getElementById('brgy-tbody');
+  tbody.innerHTML = top.map(r => {
+    const pct = Math.min(100, Math.round((r.cases / SYSTEM_CONFIG.outbreakThreshold) * 100));
+    const cls = r.risk === 'High' ? 'high' : r.risk === 'Medium' ? 'medium' : 'low';
+    return `<tr>
+      <td><strong>${r.barangay}</strong></td>
+      <td>${r.cases}</td>
+      <td>
+        <div class="prog-wrap">
+          <div class="prog-bar"><div class="prog-fill ${cls}" style="width:${pct}%"></div></div>
+          <div class="prog-val">${pct}%</div>
+        </div>
+      </td>
+      <td><span class="chip ${cls}">${r.risk}</span></td>
+      <td>
+        ${r.risk==='High' ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="quickAlert('${r.barangay}')">⚠ Alert</button>` : '—'}
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+
+  // Alert feed
+  const feedEl = document.getElementById('alert-feed');
+  const alerts = highRisk.map(r => ({level:'high', msg:`🚨 <strong>${r.barangay}</strong> — ${r.cases} active confirmed cases (OUTBREAK RISK)`, time:'Now'}));
+  riskData.filter(r=>r.risk==='Medium').slice(0,3).forEach(r => alerts.push({level:'medium', msg:`⚡ <strong>${r.barangay}</strong> — ${r.cases} cases, elevated activity`, time:'Now'}));
+  feedEl.innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <div class="alert-dot ${a.level}"></div>
+      <div><div class="alert-msg">${a.msg}</div><div class="alert-time">${a.time}</div></div>
+    </div>`).join('') || '<div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17c0-.9.5-1.2 1-1.7.7-.7 1-1.9 1-4a3.5 3.5 0 0 1 7 0c0 2.1.3 3.3 1 4 .5.5 1 .8 1 1.7h-11z"/><path d="M10 19.5a2 2 0 0 0 4 0"/></svg></div>No active alerts</div>';
+
+  // Recent submissions
+  const recentEl = document.getElementById('recent-submissions');
+  recentEl.innerHTML = allCases.slice(0,6).map(c => `
+    <div style="padding:10px 18px;border-bottom:1px solid rgba(45,55,72,0.4);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:12.5px;font-weight:600">${c.patient_name}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.barangay} · ${c.onset_date}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="chip ${c.severity==='Severe'?'high':c.severity==='Moderate'?'medium':'low'}">${c.severity}</span>
+        <span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':'high'}">${c.status}</span>
+        ${c.status==='Pending' ? `<button class="btn btn-safe" style="padding:3px 8px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','confirm')">✓ Confirm</button><button class="btn btn-ghost" style="padding:3px 8px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','reject')">✕</button>` : ''}
+      </div>
+    </div>`).join('') || '<div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="4" width="13" height="17" rx="1.6"/><rect x="8.7" y="2.5" width="6.6" height="3" rx="1" fill="currentColor" stroke="none"/><path d="M8.5 12.5 10.7 14.7 15.5 9.5"/></svg></div>No cases yet</div>';
+
+  // Charts
+  renderCharts();
+}
+
+// ── CHARTS ───────────────────────────────────────────────────
+function renderCharts() {
+  // Weekly trend — build last 8 weeks from cases
+  const weeks = [];
+  const now = new Date();
+  for (let i = 7; i >= 0; i--) {
+    const start = new Date(now); start.setDate(now.getDate() - (i+1)*7);
+    const end   = new Date(now); end.setDate(now.getDate() - i*7);
+    const count = allCases.filter(c => {
+      const d = new Date(c.onset_date);
+      return d >= start && d < end && c.status === 'Confirmed';
+    }).length;
+    weeks.push({ label: `W${8-i}`, count });
+  }
+
+  const chartOpts = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ display:false } },
+    scales:{
+      x:{ grid:{ color:'rgba(45,55,72,0.5)' }, ticks:{ color:'#718096', font:{ size:11 } } },
+      y:{ grid:{ color:'rgba(45,55,72,0.5)' }, ticks:{ color:'#718096', font:{ size:11 } }, beginAtZero:true }
+    }
+  };
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{
+      labels: weeks.map(w=>w.label),
+      datasets:[{
+        data: weeks.map(w=>w.count),
+        borderColor:'#f56565', backgroundColor:'rgba(245,101,101,0.12)',
+        tension:0.3, fill:true, pointBackgroundColor:'#f56565', pointRadius:4,
+      },{
+        data: Array(8).fill(SYSTEM_CONFIG.outbreakThreshold),
+        borderColor:'rgba(237,137,54,0.5)', borderDash:[4,4],
+        pointRadius:0, fill:false
+      }]
+    },
+    options:{ ...chartOpts, plugins:{ legend:{ display:false } } }
+  });
+
+  // Bar chart — top 6 barangays
+  const top6 = [...riskData].sort((a,b)=>b.cases-a.cases).slice(0,6);
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type:'bar',
+    data:{
+      labels: top6.map(r=>r.barangay.length>10?r.barangay.substring(0,10)+'…':r.barangay),
+      datasets:[{ data:top6.map(r=>r.cases),
+        backgroundColor: top6.map(r=>r.risk==='High'?'rgba(245,101,101,0.6)':r.risk==='Medium'?'rgba(237,137,54,0.6)':'rgba(72,187,120,0.6)'),
+        borderRadius:4 }]
+    },
+    options:chartOpts
+  });
+}
+
+// ── PENDING CASES ────────────────────────────────────────────
+async function loadPending() {
+  const tbody = document.getElementById('pending-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Loading...</td></tr>';
+  if (!allCases.length) await loadAll();
+  const pending = allCases.filter(c => c.status === 'Pending');
+  if (!pending.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">✅ No pending cases — all cases have been reviewed.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = pending.map(c => `
+    <tr>
+      <td><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted)">${c.patient_address||'—'}</span></td>
+      <td>${c.patient_age||'—'} / ${c.patient_sex||'—'}</td>
+      <td>${c.barangay}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
+      <td><span style="font-size:11px;color:var(--muted);font-style:italic">⏳ TBD by RHU</span></td>
+      <td style="font-size:12px;color:var(--muted);max-width:160px">${(c.symptoms||[]).join(', ')}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${formatDate(c.report_date)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-safe" style="padding:4px 10px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','confirm')">✓ Confirm</button>
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','reject')">✕ Reject</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function reviewCase(id, name, action) {
+  if (action === 'confirm') {
+    // Show a confirm modal with severity selector
+    const bodyHtml = `
+      <div style="margin-bottom:10px">
+        <strong>${name}</strong>'s case will be <span style="color:var(--safe);font-weight:600">confirmed</span>.
+        Please assign the severity level assessed by the RHU:
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
+        <label style="font-size:13px;font-weight:600;color:var(--text)">Severity Assessment <span style="color:var(--accent)">*</span></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="sev-mild-rhu"    onclick="selectRhuSeverity('Mild')"     class="sev-btn-rhu" style="flex:1;padding:8px 12px;border-radius:8px;border:2px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;font-weight:600">🟢 Mild</button>
+          <button id="sev-moderate-rhu" onclick="selectRhuSeverity('Moderate')" class="sev-btn-rhu" style="flex:1;padding:8px 12px;border-radius:8px;border:2px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;font-weight:600">🟡 Moderate</button>
+          <button id="sev-severe-rhu"  onclick="selectRhuSeverity('Severe')"   class="sev-btn-rhu" style="flex:1;padding:8px 12px;border-radius:8px;border:2px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;font-weight:600">🔴 Severe</button>
+        </div>
+        <div id="sev-warn-rhu" style="font-size:11px;color:var(--accent);display:none;margin-top:4px">⚠ Please select a severity level.</div>
+      </div>
+      <div style="margin-top:12px">
+        <label style="font-size:13px;font-weight:600;color:var(--text)">RHU Notes (optional)</label>
+        <textarea id="rhu-notes-input" class="form-input" style="margin-top:6px;width:100%;font-size:13px" rows="2" placeholder="Clinical notes, referral info, etc."></textarea>
+      </div>`;
+
+    window._rhuSeveritySelected = '';
+    window.selectRhuSeverity = function(sev) {
+      window._rhuSeveritySelected = sev;
+      document.querySelectorAll('.sev-btn-rhu').forEach(b => {
+        b.style.border = '2px solid var(--border)';
+        b.style.background = 'var(--card)';
+        b.style.color = '';
+      });
+      const btn = document.getElementById('sev-' + sev.toLowerCase() + '-rhu');
+      if (btn) {
+        const colors = { Mild: ['#38a169','#f0fff4'], Moderate: ['#d69e2e','#fffff0'], Severe: ['#e53e3e','#fff5f5'] };
+        btn.style.border = '2px solid ' + colors[sev][0];
+        btn.style.background = colors[sev][1];
+        btn.style.color = colors[sev][0];
+      }
+      document.getElementById('sev-warn-rhu').style.display = 'none';
+    };
+
+    showModal('Confirm Case', bodyHtml, '✓ Confirm Case', async () => {
+      if (!window._rhuSeveritySelected) {
+        const warn = document.getElementById('sev-warn-rhu');
+        if (warn) warn.style.display = 'block';
+        return false; // keep modal open
+      }
+      const notes = document.getElementById('rhu-notes-input')?.value?.trim() || '';
+      await _doConfirmCase(id, name, window._rhuSeveritySelected, notes);
+    });
+  } else {
+    // Reject — simple confirm
+    showModal(
+      'Reject Case',
+      `<span>Reject <strong>${name}</strong>'s case report? This cannot be undone.</span>`,
+      '✕ Reject',
+      async () => { await _doRejectCase(id, name); }
+    );
+  }
+}
+
+async function _doConfirmCase(id, name, severity, notes) {
+  const { error } = await DB.updateCaseStatus(id, 'Confirmed', notes, severity);
+  if (error) { showToast('⚠ Failed: ' + error.message, true); return; }
+  showToast(`✅ Case for ${name} confirmed as ${severity}!`);
+  const idx = allCases.findIndex(c => c.id === id);
+  if (idx >= 0) { allCases[idx].status = 'Confirmed'; allCases[idx].severity = severity; allCases[idx].rhu_notes = notes; }
+  const c = allCases.find(x => x.id === id);
+  if (c?.patient_contact) {
+    const sevInstructions = severity === 'Severe'
+      ? '• Immediate hospitalization may be required — go to the RHU or nearest hospital NOW\n• Monitor for: severe abdominal pain, persistent vomiting, bleeding gums, rapid breathing'
+      : severity === 'Moderate'
+      ? '• Rest at home and monitor your symptoms closely\n• Return to RHU immediately if symptoms worsen (severe abdominal pain, bleeding, difficulty breathing)'
+      : '• Rest at home and stay hydrated\n• Return to RHU if fever persists beyond 3 days or new symptoms appear';
+    const msg = `Dear ${c.patient_name}, your dengue case has been CONFIRMED by the Janiuay RHU.\nOnset: ${c.onset_date}\nSeverity: ${severity}\n${sevInstructions}\nTake paracetamol for fever (avoid ibuprofen/aspirin). Drink at least 8 glasses of water/day.\n${notes ? 'RHU Notes: ' + notes + '\n' : ''}Get well soon. -Janiuay RHU`;
+    const smsResult = await SMS.send(c.patient_contact, c.patient_name, '', msg, 'case-confirmation', user?.id, c.barangay);
+    if (smsResult.success && !smsResult.demo) {
+      showToast(`✅ Case confirmed + notification sent to ${c.patient_contact}`);
+    } else if (smsResult.demo || !smsResult.success) {
+      showToast(`✅ Case confirmed. SMS to patient failed: ${smsResult.error || 'server offline'}`, true);
+    }
+  }
+  loadPending();
+  updateRiskData();
+}
+
+async function _doRejectCase(id, name) {
+  const { error } = await DB.updateCaseStatus(id, 'Rejected');
+  if (error) { showToast('⚠ Failed: ' + error.message, true); return; }
+  showToast(`❌ Case for ${name} rejected.`);
+  const idx = allCases.findIndex(c => c.id === id);
+  if (idx >= 0) allCases[idx].status = 'Rejected';
+  loadPending();
+  updateRiskData();
+}
+
+async function updateRiskData() {
+  const { data } = await DB.getBarangayRisk();
+  if (data?.length) riskData = data;
+  const pending = allCases.filter(c=>c.status==='Pending').length;
+  const highRiskUpd = riskData.filter(r=>r.risk==='High');
+  updateUnreadBadges(pending, highRiskUpd.length);
+  document.getElementById('stat-pending').textContent = pending;
+}
+
+// Toggle whether a Confirmed case is Active or Inactive (resolved/recovered).
+// This is the single switch that the dashboard stat, risk map, and
+// barangay case list all key off — flipping it here updates all of them.
+async function toggleCaseActive(id, makeActive) {
+  const { error } = await DB.setCaseActive(id, makeActive);
+  if (error) { showToast('⚠ Failed: ' + error.message, true); return; }
+
+  const idx = allCases.findIndex(c => c.id === id);
+  if (idx >= 0) allCases[idx].is_active = makeActive;
+
+  showToast(makeActive
+    ? '🔴 Case marked Active — now counted on the risk map & active cases.'
+    : '⚪ Case marked Inactive — removed from the risk map & active cases.');
+
+  await updateRiskData();
+  loadDashboard();
+  filterHistory();
+  if (leafletMap) loadRiskMap();
+}
+
+// ── RISK MAP ─────────────────────────────────────────────────
+// ── BARANGAY COORDINATES (Janiuay, Iloilo) ──────────────────
+// Coordinates verified against OpenStreetMap / PhilAtlas barangay centroids
+const janiuayGeoJSON = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.47704680700008,11.02083469200005],[122.4704638930001,11.015309883000043],[122.46580057000006,11.020060680000029],[122.45884683100007,11.027086153000027],[122.45970274100011,11.030730111000025],[122.46756416500011,11.030141730000025],[122.4766698300001,11.025776138000026],[122.47704680700008,11.02083469200005]]]},"properties":{"NAME_3":"Abangay"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.42066683500002,11.036662127000056],[122.41441388300007,11.032044313000029],[122.40426368300007,11.027119740000046],[122.40275220600006,11.030736846000025],[122.40198156400004,11.034824399000058],[122.40759431900005,11.045084359000043],[122.42066683500002,11.036662127000056]]]},"properties":{"NAME_3":"Agcarope"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.40759431900005,11.045084359000043],[122.40198156400004,11.034824399000058],[122.40275220600006,11.030736846000025],[122.39266818800002,11.031176802000061],[122.37834224100004,11.038368818000038],[122.37700033600004,11.05813446600007],[122.38560270500011,11.056228557000054],[122.3984153130001,11.051994992000061],[122.40759431900005,11.045084359000043]]]},"properties":{"NAME_3":"Aglobong"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.47356189800007,10.966537294000034],[122.47393613000008,10.960932380000031],[122.47104135200004,10.954288193000025],[122.46374824800012,10.963691354000048],[122.46893527600002,10.968599157000028],[122.47356189800007,10.966537294000034]]]},"properties":{"NAME_3":"Aguingay"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.42553900200005,11.010977290000028],[122.42322167600003,11.007950202000075],[122.417653459,11.012399294000033],[122.40738343300006,11.016647908000039],[122.40364310200005,11.022404274000053],[122.40426368300007,11.027119740000046],[122.41793652000001,11.023592507000046],[122.42190966600003,11.020584925000037],[122.42553900200005,11.010977290000028]]]},"properties":{"NAME_3":"Anhawan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.37834224100004,11.038368818000038],[122.31961925200005,11.028805747000035],[122.30845735200012,11.047318527000073],[122.37700033600004,11.05813446600007],[122.37834224100004,11.038368818000038]]]},"properties":{"NAME_3":"Atimonan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.48904926600005,10.962278496000067],[122.4900152560001,10.955114618000039],[122.48081608300004,10.951835576000065],[122.47366726200005,10.95142332200004],[122.47104135200004,10.954288193000025],[122.47393613000008,10.960932380000031],[122.47356189800007,10.966537294000034],[122.48904926600005,10.962278496000067]]]},"properties":{"NAME_3":"Balanac"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.37871474000008,11.006079107000062],[122.32219051800007,11.004556570000034],[122.32373918400003,11.015286657000047],[122.31961925200005,11.028805747000035],[122.37834224100004,11.038368818000038],[122.37802210500001,11.009896776000062],[122.37871474000008,11.006079107000062]]]},"properties":{"NAME_3":"Barasalon"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.49361677800005,10.953465607000055],[122.49359270000002,10.95141029000007],[122.49348855500011,10.948750220000022],[122.49054506300001,10.941431568000041],[122.47411990600006,10.946638704000065],[122.47366726200005,10.95142332200004],[122.48081608300004,10.951835576000065],[122.4900152560001,10.955114618000039],[122.49361677800005,10.953465607000055]]]},"properties":{"NAME_3":"Bongol"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.53865201200006,10.952802954000049],[122.54030979200002,10.94897658800005],[122.52900698100007,10.944129170000053],[122.52521605100003,10.94906013700006],[122.53865201200006,10.952802954000049]]]},"properties":{"NAME_3":"Cabantog"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.43818606700006,10.995449436000058],[122.44391177800003,10.990359186000035],[122.45044330400003,10.986879483000052],[122.44900607500006,10.985426826000037],[122.44283266000002,10.971324109000022],[122.44143367600009,10.976760987000034],[122.43621579900002,10.97734742700004],[122.43393981300005,10.983671340000058],[122.43004944800009,10.988047287000029],[122.42568503600012,10.984159570000031],[122.41844047000006,10.99848141800004],[122.42017800300005,10.999638516000061],[122.43213570400007,10.99518071500006],[122.43818606700006,10.995449436000058]]]},"properties":{"NAME_3":"Calmay"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.43191463100004,11.035313491000068],[122.43300330300008,11.027977558000032],[122.43984982200004,11.015070944000058],[122.43713248300003,11.00995037000007],[122.42553900200005,11.010977290000028],[122.42190966600003,11.020584925000037],[122.41793652000001,11.023592507000046],[122.40426368300007,11.027119740000046],[122.41441388300007,11.032044313000029],[122.42066683500002,11.036662127000056],[122.43191463100004,11.035313491000068]]]},"properties":{"NAME_3":"Canawili"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.37180482200006,10.974388791000024],[122.36270976800006,10.974196642000038],[122.34881098700009,10.975157387000024],[122.33478410600003,10.97970491500007],[122.31916906800006,10.989741434000052],[122.32219051800007,11.004556570000034],[122.37871474000008,11.006079107000062],[122.3764120300001,10.990784934000033],[122.37180482200006,10.974388791000024]]]},"properties":{"NAME_3":"Canawillian"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.55435912000007,10.935999941000034],[122.5508282400001,10.939369053000064],[122.54329162800002,10.938528130000066],[122.54079817200011,10.940291256000023],[122.53238265200002,10.941898177000041],[122.52900698100007,10.944129170000053],[122.54030979200002,10.94897658800005],[122.55575563400009,10.944615741000064],[122.55435912000007,10.935999941000034]]]},"properties":{"NAME_3":"Caranas"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.43621579900002,10.97734742700004],[122.44143367600009,10.976760987000034],[122.44283266000002,10.971324109000022],[122.44748111000001,10.965345336000041],[122.4544009980001,10.963401098000077],[122.4492862840001,10.95428021500004],[122.44591551600001,10.952775305000046],[122.4311586010001,10.95721326000006],[122.42752964500005,10.963475794000033],[122.42157142600001,10.964268941000057],[122.42568503600012,10.984159570000031],[122.4276756270001,10.980357517000073],[122.43621579900002,10.97734742700004]]]},"properties":{"NAME_3":"Caraudan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.44999097400012,11.005768345000035],[122.4506707920001,11.003695959000027],[122.44496559000004,10.996349623000071],[122.44391177800003,10.990359186000035],[122.43818606700006,10.995449436000058],[122.43713248300003,11.00995037000007],[122.43984982200004,11.015070944000058],[122.44532767800001,11.016447461000041],[122.44999097400012,11.005768345000035]]]},"properties":{"NAME_3":"Carigangan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.42322167600003,11.007950202000075],[122.42017800300005,10.999638516000061],[122.41844047000006,10.99848141800004],[122.40811356100005,11.000386572000025],[122.40822501700006,11.013515036000058],[122.40738343300006,11.016647908000039],[122.417653459,11.012399294000033],[122.42322167600003,11.007950202000075]]]},"properties":{"NAME_3":"Cunsad"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.4704638930001,11.015309883000043],[122.47180317300001,11.011457247000067],[122.46852524600001,11.000578783000037],[122.45770647800009,11.001184137000052],[122.45618067200007,11.005422194000062],[122.4506707920001,11.003695959000027],[122.44999097400012,11.005768345000035],[122.45739386200012,11.01472973600005],[122.46580057000006,11.020060680000029],[122.4704638930001,11.015309883000043]]]},"properties":{"NAME_3":"Dabong"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.52721842400001,10.960861213000044],[122.51983631300004,10.958599780000043],[122.51380401300003,10.952849173000061],[122.51073168200003,10.954432395000026],[122.51041836800005,10.964969660000065],[122.51218569000002,10.967484100000036],[122.52124669000011,10.968562680000048],[122.52778561900004,10.963046133000034],[122.52721842400001,10.960861213000044]]]},"properties":{"NAME_3":"Damires"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.5225823830001,10.948468924000053],[122.52130346900003,10.945501309000065],[122.51268061700011,10.935480277000067],[122.5132358520001,10.931945511000038],[122.50437466200003,10.935386727000036],[122.50455611900009,10.944480320000025],[122.50646545100005,10.945918157000051],[122.50996658000008,10.94633790000006],[122.51380401300003,10.952849173000061],[122.5225823830001,10.948468924000053]]]},"properties":{"NAME_3":"Damo-ong"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.45541681100008,10.987084005000042],[122.45866681400003,10.986244562000024],[122.45739847800007,10.97853675400006],[122.45946552200007,10.975005553000074],[122.46529343700001,10.971589190000032],[122.46976260800011,10.976846168000066],[122.46893527600002,10.968599157000028],[122.46374824800012,10.963691354000048],[122.45806258300001,10.961030234000077],[122.4544009980001,10.963401098000077],[122.44748111000001,10.965345336000041],[122.44283266000002,10.971324109000022],[122.44900607500006,10.985426826000037],[122.45044330400003,10.986879483000052],[122.45541681100008,10.987084005000042]]]},"properties":{"NAME_3":"Danao"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.49811926000007,10.946896630000026],[122.5003156030001,10.944899857000053],[122.50455611900009,10.944480320000025],[122.50437466200003,10.935386727000036],[122.49054506300001,10.941431568000041],[122.49348855500011,10.948750220000022],[122.49811926000007,10.946896630000026]]]},"properties":{"NAME_3":"Gines"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.52521605100003,10.94906013700006],[122.52900698100007,10.944129170000053],[122.53238265200002,10.941898177000041],[122.54079817200011,10.940291256000023],[122.53899290900006,10.92663291100007],[122.52177803000006,10.929346573000032],[122.5132358520001,10.931945511000038],[122.51268061700011,10.935480277000067],[122.52130346900003,10.945501309000065],[122.5225823830001,10.948468924000053],[122.52521605100003,10.94906013700006]]]},"properties":{"NAME_3":"Guadalupe"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50425943300002,10.97558542400003],[122.50649829200006,10.970302777000029],[122.51218569000002,10.967484100000036],[122.51041836800005,10.964969660000065],[122.51073168200003,10.954432395000026],[122.51023963400007,10.954648913000028],[122.50917729900004,10.954949709000061],[122.50628317500002,10.953606713000056],[122.50401113500004,10.952588525000067],[122.49908040600008,10.95329513200005],[122.49361677800005,10.953465607000055],[122.4900152560001,10.955114618000039],[122.48904926600005,10.962278496000067],[122.48991378800008,10.966076312000041],[122.49504614200009,10.973869223000065],[122.50425943300002,10.97558542400003]]]},"properties":{"NAME_3":"Jibolo"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.43621579900002,10.97734742700004],[122.4276756270001,10.980357517000073],[122.42568503600012,10.984159570000031],[122.43004944800009,10.988047287000029],[122.43393981300005,10.983671340000058],[122.43621579900002,10.97734742700004]]]},"properties":{"NAME_3":"Kuyot"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.49181726300003,10.978748347000021],[122.4898373210001,10.973899331000041],[122.47672010200006,10.973221605000049],[122.472303968,10.977484979000053],[122.46976260800011,10.976846168000066],[122.4732166880001,10.983932442000025],[122.47497037800008,10.991535844000055],[122.47449587000006,10.99371283000005],[122.4797395490001,10.995093783000073],[122.48895560000005,10.988363091000053],[122.49164367500009,10.98502837600006],[122.49181726300003,10.978748347000021]]]},"properties":{"NAME_3":"Madong"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.45770647800009,11.001184137000052],[122.45541681100008,10.987084005000042],[122.45044330400003,10.986879483000052],[122.44391177800003,10.990359186000035],[122.44496559000004,10.996349623000071],[122.4506707920001,11.003695959000027],[122.45618067200007,11.005422194000062],[122.45770647800009,11.001184137000052]]]},"properties":{"NAME_3":"Manacabac"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.46852524600001,11.000578783000037],[122.47025765700005,10.995238270000073],[122.47449587000006,10.99371283000005],[122.47497037800008,10.991535844000055],[122.46692112700009,10.990477544000044],[122.45866681400003,10.986244562000024],[122.45541681100008,10.987084005000042],[122.45770647800009,11.001184137000052],[122.46852524600001,11.000578783000037]]]},"properties":{"NAME_3":"Mangil"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50425943300002,10.97558542400003],[122.49504614200009,10.973869223000065],[122.4898373210001,10.973899331000041],[122.49181726300003,10.978748347000021],[122.4955220600001,10.980220641000074],[122.50425943300002,10.97558542400003]]]},"properties":{"NAME_3":"Matag-ub"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.40738343300006,11.016647908000039],[122.40822501700006,11.013515036000058],[122.40811356100005,11.000386572000025],[122.39421916200001,10.999275277000038],[122.37871474000008,11.006079107000062],[122.39334582200001,11.023410083000044],[122.40046097000004,11.026980689000027],[122.40426368300007,11.027119740000046],[122.40364310200005,11.022404274000053],[122.40738343300006,11.016647908000039]]]},"properties":{"NAME_3":"Monte-Magapa"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.4479874220001,11.030756191000023],[122.44819706900012,11.019126829000072],[122.44532767800001,11.016447461000041],[122.43984982200004,11.015070944000058],[122.43300330300008,11.027977558000032],[122.43191463100004,11.035313491000068],[122.4479874220001,11.030756191000023]]]},"properties":{"NAME_3":"Pangilihan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.40275220600006,11.030736846000025],[122.40426368300007,11.027119740000046],[122.40046097000004,11.026980689000027],[122.39334582200001,11.023410083000044],[122.37871474000008,11.006079107000062],[122.37802210500001,11.009896776000062],[122.37834224100004,11.038368818000038],[122.39266818800002,11.031176802000061],[122.40275220600006,11.030736846000025]]]},"properties":{"NAME_3":"Panuran"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.43713248300003,11.00995037000007],[122.43818606700006,10.995449436000058],[122.43213570400007,10.99518071500006],[122.42017800300005,10.999638516000061],[122.42322167600003,11.007950202000075],[122.42553900200005,11.010977290000028],[122.43713248300003,11.00995037000007]]]},"properties":{"NAME_3":"Pararinga"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.4797395490001,10.995093783000073],[122.47449587000006,10.99371283000005],[122.47025765700005,10.995238270000073],[122.46852524600001,11.000578783000037],[122.47180317300001,11.011457247000067],[122.47785427600002,11.011814818000062],[122.47982373900004,11.008770610000056],[122.4797395490001,10.995093783000073]]]},"properties":{"NAME_3":"Patong-patong"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.40811356100005,11.000386572000025],[122.40170171000011,10.990057513000068],[122.39860186400006,10.984165156000074],[122.4024846210001,10.969328866000069],[122.39575940400005,10.972851599000023],[122.39460650900003,10.970673909000027],[122.38551145500003,10.973556145000032],[122.37180482200006,10.974388791000024],[122.3764120300001,10.990784934000033],[122.37871474000008,11.006079107000062],[122.39421916200001,10.999275277000038],[122.40811356100005,11.000386572000025]]]},"properties":{"NAME_3":"Quipot"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.46976260800011,10.976846168000066],[122.46529343700001,10.971589190000032],[122.45946552200007,10.975005553000074],[122.45739847800007,10.97853675400006],[122.45866681400003,10.986244562000024],[122.46692112700009,10.990477544000044],[122.47497037800008,10.991535844000055],[122.4732166880001,10.983932442000025],[122.46976260800011,10.976846168000066]]]},"properties":{"NAME_3":"Santo Tomas"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.47785427600002,11.011814818000062],[122.47180317300001,11.011457247000067],[122.4704638930001,11.015309883000043],[122.47704680700008,11.02083469200005],[122.47785427600002,11.011814818000062]]]},"properties":{"NAME_3":"Sarawag"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.46374824800012,10.963691354000048],[122.47104135200004,10.954288193000025],[122.47366726200005,10.95142332200004],[122.47411990600006,10.946638704000065],[122.46944283500011,10.94646528000004],[122.45944996800006,10.948600508000027],[122.4492862840001,10.95428021500004],[122.4544009980001,10.963401098000077],[122.45806258300001,10.961030234000077],[122.46374824800012,10.963691354000048]]]},"properties":{"NAME_3":"Tambal"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.53865201200006,10.952802954000049],[122.52521605100003,10.94906013700006],[122.5225823830001,10.948468924000053],[122.51380401300003,10.952849173000061],[122.51983631300004,10.958599780000043],[122.52721842400001,10.960861213000044],[122.54004760600003,10.957719372000042],[122.53865201200006,10.952802954000049]]]},"properties":{"NAME_3":"Tamu-an"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.45970274100011,11.030730111000025],[122.45884683100007,11.027086153000027],[122.46580057000006,11.020060680000029],[122.45739386200012,11.01472973600005],[122.44999097400012,11.005768345000035],[122.44532767800001,11.016447461000041],[122.44819706900012,11.019126829000072],[122.4479874220001,11.030756191000023],[122.45970274100011,11.030730111000025]]]},"properties":{"NAME_3":"Tiringanan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.55435912000007,10.935999941000034],[122.55446582700006,10.925370834000034],[122.54105450000009,10.925399607000031],[122.53899290900006,10.92663291100007],[122.54079817200011,10.940291256000023],[122.54329162800002,10.938528130000066],[122.5508282400001,10.939369053000064],[122.55435912000007,10.935999941000034]]]},"properties":{"NAME_3":"Tolarucan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.4898373210001,10.973899331000041],[122.49504614200009,10.973869223000065],[122.48991378800008,10.966076312000041],[122.48904926600005,10.962278496000067],[122.47356189800007,10.966537294000034],[122.46893527600002,10.968599157000028],[122.46976260800011,10.976846168000066],[122.472303968,10.977484979000053],[122.47672010200006,10.973221605000049],[122.4898373210001,10.973899331000041]]]},"properties":{"NAME_3":"Tuburan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.42568503600012,10.984159570000031],[122.42157142600001,10.964268941000057],[122.41330901800006,10.96740737500005],[122.4024846210001,10.969328866000069],[122.39860186400006,10.984165156000074],[122.40170171000011,10.990057513000068],[122.40985060700007,10.987810786000068],[122.4148609340001,10.982829632000062],[122.41933623300008,10.981796872000075],[122.42568503600012,10.984159570000031]]]},"properties":{"NAME_3":"Ubian"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.41844047000006,10.99848141800004],[122.42568503600012,10.984159570000031],[122.41933623300008,10.981796872000075],[122.4148609340001,10.982829632000062],[122.40985060700007,10.987810786000068],[122.40170171000011,10.990057513000068],[122.40811356100005,11.000386572000025],[122.41844047000006,10.99848141800004]]]},"properties":{"NAME_3":"Yabon"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50576440500004,10.948164458000065],[122.50665430900006,10.947908217000077],[122.50769638200006,10.947037528000067],[122.50996658000008,10.94633790000006],[122.50646545100005,10.945918157000051],[122.50475261400004,10.94698865600003],[122.50522420300001,10.948349404000055],[122.50576440500004,10.948164458000065]]]},"properties":{"NAME_3":"Aquino Nobleza East (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50522420300001,10.948349404000055],[122.50475261400004,10.94698865600003],[122.50317028800009,10.948202193000043],[122.50324197400005,10.948637526000027],[122.50522420300001,10.948349404000055]]]},"properties":{"NAME_3":"Aquino Nobleza West (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50492364700006,10.951032101000067],[122.50453655500007,10.950383948000024],[122.50363634300004,10.951261656000042],[122.50401113500004,10.952588525000067],[122.50628317500002,10.953606713000056],[122.50492364700006,10.951032101000067]]]},"properties":{"NAME_3":"R. Armada (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50693187200011,10.94998759400005],[122.50628506100009,10.949589247000063],[122.5058348880001,10.949617700000033],[122.50520024600007,10.949616036000066],[122.50518617300008,10.95072058200003],[122.50695604300006,10.951391014000023],[122.50693187200011,10.94998759400005]]],[[[122.50693187200011,10.94998759400005],[122.50825751600007,10.95229936800007],[122.50917729900004,10.954949709000061],[122.51023963400007,10.954648913000028],[122.50767227500012,10.949133697000036],[122.50693187200011,10.94998759400005]]]]},"properties":{"NAME_3":"Concepcion Pob. (D.G. Abordo)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50208448400008,10.949458675000074],[122.50266033700007,10.94821494200005],[122.5003156030001,10.944899857000053],[122.49811926000007,10.946896630000026],[122.50056274700012,10.94935969100004],[122.50060656700009,10.949825606000047],[122.50208448400008,10.949458675000074]]]},"properties":{"NAME_3":"Golgota (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50317028800009,10.948202193000043],[122.50475261400004,10.94698865600003],[122.50646545100005,10.945918157000051],[122.50455611900009,10.944480320000025],[122.5003156030001,10.944899857000053],[122.50266033700007,10.94821494200005],[122.50317028800009,10.948202193000043]]]},"properties":{"NAME_3":"Locsin (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50341304500012,10.94912615800007],[122.50520024600007,10.949616036000066],[122.5058348880001,10.949617700000033],[122.50522420300001,10.948349404000055],[122.50324197400005,10.948637526000027],[122.50341304500012,10.94912615800007]]],[[[122.50341304500012,10.94912615800007],[122.50208448400008,10.949458675000074],[122.50261067000008,10.949876132000043],[122.50333161300011,10.949720729000035],[122.50341304500012,10.94912615800007]]],[[[122.50208448400008,10.949458675000074],[122.50060656700009,10.949825606000047],[122.50173231400004,10.950067568000065],[122.50208448400008,10.949458675000074]]]]},"properties":{"NAME_3":"Don T. Lutero Center (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50632099300003,10.948548132000042],[122.50767227500012,10.949133697000036],[122.50769638200006,10.947037528000067],[122.50665430900006,10.947908217000077],[122.50632099300003,10.948548132000042]]],[[[122.50632099300003,10.948548132000042],[122.50576440500004,10.948164458000065],[122.50522420300001,10.948349404000055],[122.5058348880001,10.949617700000033],[122.50628506100009,10.949589247000063],[122.50632099300003,10.948548132000042]]]]},"properties":{"NAME_3":"Don T. Lutero East (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.49908040600008,10.95329513200005],[122.49961699500011,10.95267620900006],[122.50060656700009,10.949825606000047],[122.50056274700012,10.94935969100004],[122.49359270000002,10.95141029000007],[122.49361677800005,10.953465607000055],[122.49908040600008,10.95329513200005]]]},"properties":{"NAME_3":"Don T. Lutero West (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50825751600007,10.95229936800007],[122.50695604300006,10.951391014000023],[122.50518617300008,10.95072058200003],[122.50492364700006,10.951032101000067],[122.50628317500002,10.953606713000056],[122.50917729900004,10.954949709000061],[122.50825751600007,10.95229936800007]]]},"properties":{"NAME_3":"Crispin Salazar North (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50341304500012,10.94912615800007],[122.50324197400005,10.948637526000027],[122.50317028800009,10.948202193000043],[122.50266033700007,10.94821494200005],[122.50208448400008,10.949458675000074],[122.50341304500012,10.94912615800007]]],[[[122.50341304500012,10.94912615800007],[122.50333161300011,10.949720729000035],[122.50453655500007,10.950383948000024],[122.50492364700006,10.951032101000067],[122.50518617300008,10.95072058200003],[122.50520024600007,10.949616036000066],[122.50341304500012,10.94912615800007]]]]},"properties":{"NAME_3":"Crispin Salazar South (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.50056274700012,10.94935969100004],[122.49811926000007,10.946896630000026],[122.49348855500011,10.948750220000022],[122.49359270000002,10.95141029000007],[122.50056274700012,10.94935969100004]]]},"properties":{"NAME_3":"San Julian (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50242298700005,10.950867096000025],[122.50363634300004,10.951261656000042],[122.50453655500007,10.950383948000024],[122.50333161300011,10.949720729000035],[122.50261067000008,10.949876132000043],[122.50242298700005,10.950867096000025]]],[[[122.50242298700005,10.950867096000025],[122.50173231400004,10.950067568000065],[122.50060656700009,10.949825606000047],[122.49961699500011,10.95267620900006],[122.50242298700005,10.950867096000025]]]]},"properties":{"NAME_3":"San Pedro (Pob.)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[122.51073168200003,10.954432395000026],[122.51380401300003,10.952849173000061],[122.50996658000008,10.94633790000006],[122.50769638200006,10.947037528000067],[122.50767227500012,10.949133697000036],[122.51023963400007,10.954648913000028],[122.51073168200003,10.954432395000026]]]},"properties":{"NAME_3":"Santa Rita (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50632099300003,10.948548132000042],[122.50665430900006,10.947908217000077],[122.50576440500004,10.948164458000065],[122.50632099300003,10.948548132000042]]],[[[122.50632099300003,10.948548132000042],[122.50628506100009,10.949589247000063],[122.50693187200011,10.94998759400005],[122.50767227500012,10.949133697000036],[122.50632099300003,10.948548132000042]]],[[[122.50693187200011,10.94998759400005],[122.50695604300006,10.951391014000023],[122.50825751600007,10.95229936800007],[122.50693187200011,10.94998759400005]]]]},"properties":{"NAME_3":"Capt. A. Tirador (Pob.)"}},{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[122.50242298700005,10.950867096000025],[122.50261067000008,10.949876132000043],[122.50208448400008,10.949458675000074],[122.50173231400004,10.950067568000065],[122.50242298700005,10.950867096000025]]],[[[122.50242298700005,10.950867096000025],[122.49961699500011,10.95267620900006],[122.49908040600008,10.95329513200005],[122.50401113500004,10.952588525000067],[122.50363634300004,10.951261656000042],[122.50242298700005,10.950867096000025]]]]},"properties":{"NAME_3":"S. M. Villa (Pob.)"}}]};
+
+const BRGY_COORDS = {
+  // Coordinates sourced from official PSGC/NAMRIA barangay boundaries
+  // (2019 PSA administrative boundary dataset), verified against
+  // PhilAtlas municipal records — matches real-world GPS positions.
+  // ── Poblacion cluster (Janiuay town center) ───────────
+  'Don T. Lutero Center (Pob.)': [10.948882, 122.504404],
+  'Don T. Lutero East (Pob.)': [10.948228, 122.507085],
+  'Don T. Lutero West (Pob.)': [10.952043, 122.496718],
+  'Aquino Nobleza East (Pob.)': [10.947473, 122.506048],
+  'Aquino Nobleza West (Pob.)': [10.947595, 122.504462],
+  'Capt. A. Tirador (Pob.)': [10.949361, 122.506884],
+  'Concepcion Pob. (D.G. Abordo)': [10.950354, 122.506065],
+  'Crispin Salazar North (Pob.)': [10.952953, 122.507211],
+  'Crispin Salazar South (Pob.)': [10.950052, 122.504564],
+  'Golgota (Pob.)': [10.947556, 122.500484],
+  'Locsin (Pob.)': [10.946453, 122.503512],
+  'R. Armada (Pob.)': [10.951925, 122.504609],
+  'S. M. Villa (Pob.)': [10.951925, 122.502303],
+  'San Julian (Pob.)': [10.949055, 122.49688],
+  'San Pedro (Pob.)': [10.950626, 122.503379],
+  'Santa Rita (Pob.)': [10.950991, 122.510623],
+
+  // ── North of town center ──────────────────────────────
+  'Guadalupe': [10.937886, 122.527615],
+  'Cabantog': [10.946553, 122.530901],
+  'Jibolo': [10.963624, 122.499907],
+  'Matag-ub': [10.977167, 122.496225],
+  'Caranas': [10.943014, 122.543095],
+  'Monte-Magapa': [11.009797, 122.395023],
+
+  // ── Northwest — Mangil, Danao, Yabon corridor ─────────
+  'Aguingay': [10.962312, 122.469331],
+  'Tambal': [10.957659, 122.459804],
+  'Madong': [10.98448, 122.482501],
+  'Santo Tomas': [10.981235, 122.464872],
+  'Manacabac': [10.993354, 122.450437],
+  'Mangil': [10.994476, 122.464497],
+  'Danao': [10.973297, 122.453038],
+  'Calmay': [10.986153, 122.440729],
+  'Ubian': [10.975563, 122.41238],
+  'Yabon': [10.994269, 122.412444],
+  'Quipot': [10.987111, 122.387766],
+  'Dabong': [11.008613, 122.461643],
+  'Tuburan': [10.97091, 122.481132],
+  'Patong-patong': [11.004675, 122.474779],
+
+  // ── West of town center ───────────────────────────────
+  'Kuyot': [10.982014, 122.430672],
+  'Abangay': [11.023305, 122.469724],
+  'Anhawan': [11.018616, 122.414379],
+  'Carigangan': [11.000023, 122.442836],
+  'Panuran': [11.016653, 122.38287],
+  'Bongol': [10.947694, 122.483542],
+  'Balanac': [10.958023, 122.481146],
+  'Canawili': [11.022089, 122.428025],
+  'Canawillian': [10.990263, 122.34777],
+  'Gines': [10.942956, 122.497842],
+
+  // ── Northeast — Cunsad, Tiringanan direction ──────────
+  'Agcarope': [11.035743, 122.410953],
+  'Damo-ong': [10.93998, 122.51051],
+  'Damires': [10.95973, 122.517051],
+  'Tiringanan': [11.017787, 122.454489],
+  'Cunsad': [11.004168, 122.414991],
+
+  // ── East of town center ───────────────────────────────
+  'Sarawag': [11.018072, 122.475525],
+  'Caraudan': [10.968335, 122.433785],
+  'Tamu-an': [10.955284, 122.527857],
+  'Barasalon': [11.022046, 122.349919],
+  'Pararinga': [11.003794, 122.42964],
+  'Pangilihan': [11.023552, 122.441734],
+  'Aglobong': [11.041727, 122.391936],
+  'Atimonan': [11.042844, 122.344597],
+
+  // ── Far east ──────────────────────────────────────────
+  'Tolarucan': [10.931316, 122.547009],
+};
+
+let leafletMap = null;
+let mapMarkers = [];
+let brgyBoundaryLayer = null;
+
+async function loadRiskMap() {
+  if (!riskData.length) await loadAll();
+
+  // ── Init map (only once) ──────────────────────────────────
+  if (!leafletMap) {
+    leafletMap = L.map('janiuay-map', { zoomControl: true }).setView([10.9530, 122.4880], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(leafletMap);
+
+    // Draw barangay boundary lines (outline only, no fill) for every barangay in Janiuay
+    brgyBoundaryLayer = L.geoJSON(janiuayGeoJSON, {
+      style: function () {
+        return {
+          fillOpacity: 0,       // no fill — line only
+          color: '#ffffff',     // outline color (white)
+          weight: 1.5,
+          opacity: 0.8
+        };
+      },
+      onEachFeature: function (feature, layer) {
+        const name = feature.properties.NAME_3;
+        layer.bindPopup(`<strong>${name}</strong><br>Barangay, Janiuay, Iloilo`);
+        layer.on({
+          mouseover: function (e) {
+            e.target.setStyle({ weight: 4, color: '#fff' });
+          },
+          mouseout: function (e) {
+            brgyBoundaryLayer.resetStyle(e.target);
+          }
+        });
+      }
+    }).addTo(leafletMap);
+
+    // Force map to recalculate size after flex layout renders
+    setTimeout(() => leafletMap.invalidateSize(), 100);
+  }
+
+  // Remove old markers
+  mapMarkers.forEach(m => m.remove());
+  mapMarkers = [];
+
+  // ── Place dots for ALL barangays from BRGY_COORDS ──────────
+  // Build a lookup from riskData for quick access
+  const riskLookup = {};
+  riskData.forEach(r => { riskLookup[r.barangay] = r; });
+
+  Object.entries(BRGY_COORDS).forEach(([brgyName, coords]) => {
+    const r = riskLookup[brgyName] || { barangay: brgyName, cases: 0, severe: 0, risk: 'Low' };
+
+    // Skip barangays with 0 cases — no dot shown
+    if (r.cases === 0) return;
+
+    // Color: red=High(≥5), orange=Medium(3-4), green=Low(1-2)
+    const color       = r.risk === 'High' ? '#f56565' : r.risk === 'Medium' ? '#ed8936' : '#48bb78';
+    const borderColor = r.risk === 'High' ? '#c53030' : r.risk === 'Medium' ? '#c05621' : '#276749';
+    // Dot grows with severity: High scales up, Medium=11, Low=8
+    const radius = r.risk === 'High' ? Math.min(8 + (r.cases - 5) * 2, 22) : r.risk === 'Medium' ? 11 : 8;
+
+    // Glow halo is a few times wider than the core dot, softly blurred and pulsing
+    const dotSize  = radius * 2;
+    const haloSize = dotSize * 3.2;
+
+    const glowIcon = L.divIcon({
+      className: 'glow-marker-wrap',
+      html: `
+        <div class="glow-marker" style="width:${haloSize}px;height:${haloSize}px">
+          <div class="glow-halo" style="width:${haloSize}px;height:${haloSize}px;background:${color};"></div>
+          <div class="glow-core" style="width:${dotSize}px;height:${dotSize}px;background:${color};border:1.5px solid ${borderColor};"></div>
+        </div>
+      `,
+      iconSize: [haloSize, haloSize],
+      iconAnchor: [haloSize / 2, haloSize / 2]
+    });
+
+    const circle = L.marker(coords, { icon: glowIcon }).addTo(leafletMap);
+
+    const cases = allCases.filter(c => c.barangay === brgyName);
+    circle.bindPopup(`
+      <div style="min-width:180px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px">${brgyName}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+          <span style="background:${color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${r.risk} Risk</span>
+        </div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:6px">Active Cases: <strong style="color:#e2e8f0">${r.cases}</strong></div>
+        <div style="font-size:12px;color:#9ca3af">Total cases: <strong style="color:#e2e8f0">${cases.length}</strong></div>
+        <div style="font-size:12px;color:#9ca3af">Severe: <strong style="color:#e2e8f0">${cases.filter(c=>c.severity==='Severe').length}</strong></div>
+        <div style="margin-top:8px">
+          <button onclick="scrollToBrgy('${brgyName}')"
+            style="background:#2d3748;color:#e2e8f0;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;width:100%">
+            📋 View Cases in List →
+          </button>
+        </div>
+      </div>
+    `, { maxWidth: 240 });
+
+    mapMarkers.push(circle);
+  });
+
+  // ── Build barangay case list ──────────────────────────────
+  renderBrgyCaseList();
+}
+
+function scrollToBrgy(brgy) {
+  const el = document.getElementById('brgy-item-' + brgy.replace(/[^a-zA-Z0-9]/g,'_'));
+  if (el) {
+    el.scrollIntoView({ behavior:'smooth', block:'center' });
+    // Auto-expand
+    const cases = el.querySelector('.brgy-cases');
+    const chev  = el.querySelector('.brgy-chevron');
+    if (cases && !cases.classList.contains('open')) {
+      cases.classList.add('open');
+      if (chev) chev.classList.add('open');
+    }
+  }
+}
+
+function renderBrgyCaseList() {
+  // Always show all barangays — merge BRGY_COORDS keys with riskData
+  const riskLookup = {};
+  riskData.forEach(r => { riskLookup[r.barangay] = r; });
+
+  const allBrgyList = Object.keys(BRGY_COORDS).map(b =>
+    riskLookup[b] || { barangay: b, cases: 0, severe: 0, risk: 'Low' }
+  );
+
+  const sorted = allBrgyList.sort((a,b) => {
+    const rOrder = { High:0, Medium:1, Low:2 };
+    return (rOrder[a.risk]??3) - (rOrder[b.risk]??3) || b.cases - a.cases;
+  });
+
+  const el = document.getElementById('brgy-case-list');
+  el.innerHTML = sorted.map(r => {
+    const cls   = r.risk === 'High' ? 'high' : r.risk === 'Medium' ? 'medium' : 'low';
+    const color = r.risk === 'High' ? '#f56565' : r.risk === 'Medium' ? '#ed8936' : '#48bb78';
+    const cases = allCases.filter(c => c.barangay === r.barangay);
+    const safeId = r.barangay.replace(/[^a-zA-Z0-9]/g,'_');
+
+    const casesHtml = cases.length === 0
+      ? `<div style="padding:12px 16px;font-size:12px;color:var(--muted)">No cases submitted yet.</div>`
+      : cases.map((c, i) => {
+          const sevColor = c.severity==='Severe'?'#f56565':c.severity==='Moderate'?'#ed8936':'#48bb78';
+          const statusColor = c.status==='Confirmed'?'#48bb78':c.status==='Pending'?'#ecc94b':'#718096';
+          return `
+          <div class="case-row" onclick="toggleCaseDetail('${safeId}_case_${i}')">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:8px;height:8px;border-radius:50%;background:${sevColor};flex-shrink:0;display:inline-block"></span>
+              <span style="font-size:13px;font-weight:500;color:var(--text)">${c.patient_name || 'Unknown'}</span>
+              <span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:${statusColor}22;color:${statusColor}">${c.status}</span>
+              ${c.status==='Confirmed' ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${c.is_active===false?'#71809622':'#f5656522'};color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'⚪ Inactive':'🔴 Active'}</span>` : ''}
+              <span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${sevColor}22;color:${sevColor}">${c.severity}</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px">
+              Onset: ${c.onset_date || '—'} · Reported: ${c.report_date ? new Date(c.report_date).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—'}
+            </div>
+            <div class="case-detail" id="${safeId}_case_${i}">
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Patient Information</div>
+              <div class="detail-grid">
+                <div class="detail-field"><div class="detail-label">Full Name</div><div class="detail-val">${c.patient_name || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Age</div><div class="detail-val">${c.patient_age || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Sex</div><div class="detail-val">${c.patient_sex || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Address</div><div class="detail-val">${c.patient_address || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Mobile Number</div><div class="detail-val">${c.patient_contact || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Barangay</div><div class="detail-val">${c.barangay}</div></div>
+                <div class="detail-field"><div class="detail-label">Onset Date</div><div class="detail-val">${c.onset_date || '—'}</div></div>
+                <div class="detail-field"><div class="detail-label">Severity</div><div class="detail-val" style="color:${sevColor}">${c.severity || '—'}</div></div>
+                <div class="detail-field" style="grid-column:1/-1"><div class="detail-label">Symptoms</div><div class="detail-val">${Array.isArray(c.symptoms)?c.symptoms.join(', '):(c.symptoms||'—')}</div></div>
+                <div class="detail-field"><div class="detail-label">Status</div><div class="detail-val" style="color:${statusColor}">${c.status}</div></div>
+                ${c.status==='Confirmed' ? `<div class="detail-field"><div class="detail-label">Active Status</div><div class="detail-val" style="color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'Inactive / Resolved':'Active'}</div></div>` : ''}
+                <div class="detail-field"><div class="detail-label">Submitted by</div><div class="detail-val">${c.submitted_by || '—'}</div></div>
+                ${c.rhu_notes ? `<div class="detail-field" style="grid-column:1/-1"><div class="detail-label">RHU Notes</div><div class="detail-val">${c.rhu_notes}</div></div>` : ''}
+              </div>
+              <div style="margin-top:10px;display:flex;gap:6px">
+                <button class="btn btn-primary" style="font-size:11px;padding:5px 10px"
+                  onclick="event.stopPropagation();showPage('pending');setTimeout(()=>document.getElementById('pending-search')?.focus(),300)">
+                  ✏️ Review Case
+                </button>
+                ${c.status==='Confirmed' ? `
+                <button class="btn ${c.is_active===false?'btn-ghost':'btn-danger'}" style="font-size:11px;padding:5px 10px"
+                  onclick="event.stopPropagation();toggleCaseActive('${c.id}', ${c.is_active===false})">
+                  ${c.is_active===false?'⚪ Reactivate Case':'🔴 Mark Resolved / Inactive'}
+                </button>` : ''}
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+    return `
+    <div class="brgy-list-item" id="brgy-item-${safeId}">
+      <div class="brgy-row" onclick="toggleBrgyList('${safeId}', '${r.barangay}')">
+        <span class="brgy-dot ${cls}"></span>
+        <span style="font-size:13px;font-weight:500;color:var(--text);flex:1">${r.barangay}</span>
+        <span style="font-size:11px;color:${color};margin-right:6px">${r.cases} case${r.cases!==1?'s':''}</span>
+        <span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${color}22;color:${color};margin-right:6px">${r.risk}</span>
+        <span class="brgy-chevron" id="chev-${safeId}">▶</span>
+      </div>
+      <div class="brgy-cases" id="cases-${safeId}" style="padding-bottom:${cases.length?'8px':'0'}">
+        ${casesHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleBrgyList(safeId, brgy) {
+  const cases = document.getElementById('cases-' + safeId);
+  const chev  = document.getElementById('chev-' + safeId);
+  if (!cases) return;
+  const isOpen = cases.classList.toggle('open');
+  chev.classList.toggle('open', isOpen);
+
+  // Pan map to this barangay
+  const r = riskData.find(x => x.barangay === brgy);
+  const coords = BRGY_COORDS[brgy];
+  if (coords && leafletMap) {
+    leafletMap.flyTo(coords, 15, { duration: 0.8 });
+  }
+}
+
+function toggleCaseDetail(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+function showBrgyDetail(brgy) {
+  selectedBrgy = brgy;
+  showPage('riskmap');
+  setTimeout(() => scrollToBrgy(brgy), 200);
+}
+
+function emailBarangay() {
+  if (!selectedBrgy) return;
+  showPage('emailcomposer');
+  setRecipient(null, 'specific');
+  document.getElementById('email-brgy-target').value = selectedBrgy;
+  document.getElementById('email-type').value = 'warning';
+  updateEmailPreview();
+}
+
+// ── ALERTS ───────────────────────────────────────────────────
+async function loadAlerts() {
+  if (!riskData.length) await loadAll();
+  const highRisk = riskData.filter(r=>r.risk==='High');
+  const medium   = riskData.filter(r=>r.risk==='Medium');
+  const el = document.getElementById('alert-center-list');
+
+  let html = '';
+  highRisk.forEach(r => {
+    html += `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px;color:var(--accent)">🚨 OUTBREAK RISK — Barangay ${r.barangay}</div>
+        <div style="font-size:12.5px;color:var(--text);margin-top:2px">${r.cases} active confirmed cases (Threshold: ${SYSTEM_CONFIG.outbreakThreshold}). Immediate intervention recommended.</div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <button class="btn btn-primary" style="padding:5px 12px;font-size:11px" onclick="quickAlert('${r.barangay}')">✉️ Send Warning SMS</button>
+          <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px" onclick="showBrgyDetail('${r.barangay}');showPage('riskmap')">View Details</button>
+        </div>
+      </div>
+      <span class="chip high">OUTBREAK RISK</span>
+    </div>`;
+  });
+
+  medium.forEach(r => {
+    html += `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px;color:var(--warn)">⚡ ELEVATED RISK — Barangay ${r.barangay}</div>
+        <div style="font-size:12.5px;color:var(--text);margin-top:2px">${r.cases} active confirmed cases. Intensify surveillance.</div>
+      </div>
+      <span class="chip medium">MEDIUM</span>
+    </div>`;
+  });
+
+  el.innerHTML = html || '<div class="empty-state"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M7.8 12.3 10.5 15 16.3 8.8"/></svg></div>No active high-risk alerts. All barangays are below the outbreak threshold.</div>';
+}
+
+// ── SMS COMPOSER ──────────────────────────────────────────────
+let currentRecipient = 'all';
+
+const EMAIL_TEMPLATES = {
+  prevention: {
+    en: `Dear Resident,\n\nThis is a dengue prevention advisory from the Janiuay Rural Health Unit.\n\nDengue fever cases have been recorded in our municipality. Please take the following preventive measures:\n\n✅ Eliminate standing water (flower pots, cans, tires)\n✅ Change water in containers every week\n✅ Use mosquito repellent and wear long sleeves\n✅ Install window screens and use mosquito nets\n✅ Report symptoms immediately to your barangay health worker\n\nSymptoms of dengue: sudden high fever, severe headache, joint pain, skin rash, and eye pain.\n\nFor more information, contact the Janiuay RHU.\n\nStay safe,\nJaniuay RHU — Dengue Alert`,
+    fil: `Mahal na Residente,\n\nIto ay isang advisory mula sa Rural Health Unit ng Janiuay.\n\nMay mga naitala na kaso ng dengue sa aming munisipyo. Pakisunod ang mga sumusunod na pag-iingat:\n\n✅ Alisin ang mga nakatayong tubig (paso, lata, gulong)\n✅ Palitan ang tubig sa mga lalagyan tuwing linggo\n✅ Gumamit ng mosquito repellent at magsuot ng mahabang manggas\n✅ Mag-ulat ng mga sintomas sa inyong BHW\n\nManatiling ligtas,\nJaniuay RHU — Dengue Alert`
+  },
+  warning: {
+    en: `⚠ DENGUE OUTBREAK WARNING\n\nDear Resident,\n\nThis is an URGENT WARNING from the Janiuay Rural Health Unit.\n\nAn outbreak risk has been detected in your area. Multiple dengue cases have been confirmed in the past 14 days.\n\n🚨 IMMEDIATE ACTIONS REQUIRED:\n• Empty all water containers in and around your home NOW\n• Seek immediate medical attention if you or any family member has fever\n• Do NOT self-medicate — go to the RHU or nearest hospital\n• Cooperate with fogging operations in your area\n\nThis is a public health emergency. Please take this seriously.\n\nJaniuay RHU — Dengue Alert`,
+    fil: `⚠ BABALA: DENGUE OUTBREAK\n\nMahal na Residente,\n\nIto ay AGARANG BABALA mula sa Janiuay Rural Health Unit.\n\nNatuklasan ang panganib ng outbreak sa inyong lugar. Maraming kaso ng dengue ang nakumpirma sa nakaraang 14 na araw.\n\n🚨 KAILANGANG GAWIN AGAD:\n• Alisan ng tubig ang lahat ng lalagyan sa inyong bahay\n• Humingi ng medikal na tulong kung may lagnat\n• Makiisa sa fogging operations\n\nJaniuay RHU — Dengue Alert`
+  },
+  fogging: {
+    en: `Dear Resident,\n\nFOGGING SCHEDULE NOTICE\n\nThe Janiuay Municipal Health Office will conduct fogging operations in your area.\n\n📅 Schedule: Please check with your barangay captain for the exact date and time.\n\nDuring fogging operations:\n• Stay indoors with windows and doors closed\n• Cover food, water, and utensils\n• Return inside for at least 30 minutes after fogging\n• Cover fish ponds and other water sources\n\nForogging to be effective, please also eliminate breeding sites in your premises.\n\nJaniuay Municipal Health Office`,
+    fil: `Mahal na Residente,\n\nABAISO NG FOGGING SCHEDULE\n\nMagkakaroon ng fogging operations ang Janiuay Municipal Health Office sa inyong lugar.\n\nSa panahon ng fogging:\n• Manatili sa loob ng bahay na nakasirado ang bintana at pinto\n• Takpan ang pagkain, tubig, at kagamitan\n• Bumalik sa loob ng bahay ng hindi bababa sa 30 minuto pagkatapos ng fogging\n\nJaniuay Municipal Health Office`
+  },
+  education: {
+    en: `DENGUE HEALTH BULLETIN — Know the Signs\n\nDear Resident,\n\nDengue fever is a serious illness spread by the Aedes mosquito. Here's what you need to know:\n\n⚠ WARNING SIGNS (Seek emergency care immediately):\n• Severe abdominal pain or tenderness\n• Vomiting blood or blood in stool\n• Rapid breathing\n• Bleeding from nose or gums\n• Restlessness, confusion\n\n📌 DENGUE FACTS:\n• Incubation: 4-10 days after mosquito bite\n• There is NO specific medicine for dengue\n• Stay hydrated and rest\n• Most people recover in 1-2 weeks\n\nJaniuay RHU — Dengue Alert`,
+    fil: `HEALTH BULLETIN TUNGKOL SA DENGUE\n\nMahal na Residente,\n\nAng dengue ay isang seryosong sakit na hatid ng lamok na Aedes.\n\n⚠ MGA BABALA (Humingi kaagad ng medikal na tulong):\n• Matinding sakit sa tiyan\n• Pagsusuka ng dugo\n• Pagdurugo ng ilong o gilagid\n\nJaniuay RHU — Dengue Alert`
+  },
+  intervention: {
+    en: `DENGUE INTERVENTION UPDATE\n\nDear Resident,\n\nThe Janiuay Rural Health Unit and Barangay Health Workers are actively conducting dengue interventions in your area.\n\n🔧 ONGOING INTERVENTIONS:\n• Fogging operations in high-risk barangays\n• Household clean-up drives\n• Larvicide distribution\n• Intensified BHW monitoring visits\n\nWe encourage your cooperation and participation:\n• Allow BHWs access for household inspection\n• Participate in cleanup drives\n• Report new dengue cases immediately\n\nTogether, we can stop dengue.\n\nJaniuay RHU — Dengue Alert`,
+    fil: `UPDATE SA MGA PAKIKIALAM PARA SA DENGUE\n\nMahal na Residente,\n\nActibo ang Janiuay RHU sa pagsasagawa ng mga aksyon laban sa dengue.\n\n🔧 KASALUKUYANG GINAGAWA:\n• Fogging operations\n• Household clean-up drives\n• Pamamahagi ng larvicide\n\nJaniuay RHU — Dengue Alert`
+  }
+};
+
+const EMAIL_SUBJECTS = {
+  prevention: 'Dengue Prevention Advisory — Janiuay RHU',
+  warning:    '⚠ DENGUE OUTBREAK WARNING — Immediate Action Required',
+  fogging:    'Fogging Schedule Notice — Janiuay Municipal Health',
+  education:  'Dengue Health Bulletin — Know the Signs',
+  intervention:'Dengue Intervention Update — Your Area'
+};
+
+function setRecipient(btn, val) {
+  currentRecipient = val;
+  document.querySelectorAll('.rec-tab').forEach(t=>t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const wrap = document.getElementById('brgy-select-wrap');
+  wrap.style.display = val === 'specific' ? 'block' : 'none';
+  const toText = val==='all'?'All registered patients (from confirmed cases)':val==='highrisk'?'High-risk barangay patients':document.getElementById('email-brgy-target')?.value||'Selected barangay';
+  document.getElementById('preview-to').textContent = toText;
+}
+
+function updateEmailPreview() {
+  const type = document.getElementById('email-type').value;
+  const lang = document.getElementById('email-lang').value;
+  const template = EMAIL_TEMPLATES[type]?.[lang] || '';
+  document.getElementById('email-body').value = template;
+  document.getElementById('email-preview-body').textContent = template;
+  document.getElementById('email-subject').value = EMAIL_SUBJECTS[type] || '';
+  document.getElementById('preview-subject').textContent = EMAIL_SUBJECTS[type] || '—';
+}
+
+function syncPreview() {
+  document.getElementById('email-preview-body').textContent = document.getElementById('email-body').value;
+}
+
+async function sendEmail() {
+  const subject = document.getElementById('email-subject').value;
+  const body    = document.getElementById('email-body').value;
+  const type    = document.getElementById('email-type').options[document.getElementById('email-type').selectedIndex].text;
+  const btn     = document.getElementById('send-email-btn');
+
+  if (!subject || !body) { showToast('⚠ Please fill in header and message.', true); return; }
+
+  btn.disabled = true; btn.textContent = '⏳ Sending...';
+
+  let targetBrgy = currentRecipient === 'specific' ? document.getElementById('email-brgy-target').value : null;
+
+  // ── Build patient recipients from submitted cases ──────────
+  let caseRecipients = allCases.filter(c => c.patient_contact && c.patient_contact.trim() !== '');
+  if (currentRecipient === 'specific' && targetBrgy) {
+    caseRecipients = caseRecipients.filter(c => c.barangay === targetBrgy);
+  } else if (currentRecipient === 'highrisk') {
+    const highBrgys = riskData.filter(r=>r.risk==='High').map(r=>r.barangay);
+    caseRecipients = caseRecipients.filter(c => highBrgys.includes(c.barangay));
+  }
+
+  // ── Also include BHW/barangay accounts from USERS list ────
+  const bhwRecipients = USERS
+    .filter(u => u.role === 'bhw' && u.phone)
+    .filter(u => {
+      if (currentRecipient === 'specific' && targetBrgy) return u.barangay === targetBrgy;
+      if (currentRecipient === 'highrisk') {
+        const highBrgys = riskData.filter(r=>r.risk==='High').map(r=>r.barangay);
+        return highBrgys.includes(u.barangay);
+      }
+      return true; // 'all' — include every BHW
+    })
+    .map(u => ({ contact: u.phone.trim(), name: u.name || 'BHW ' + (u.barangay || '') }));
+
+  // ── Merge + deduplicate by mobile number ───────────────────
+  const contactMap = new Map();
+  caseRecipients.forEach(c => contactMap.set(c.patient_contact.trim(), { contact: c.patient_contact.trim(), name: c.patient_name }));
+  bhwRecipients.forEach(b => { if (!contactMap.has(b.contact)) contactMap.set(b.contact, b); });
+  const unique = [...contactMap.values()];
+
+  if (unique.length === 0) {
+    showToast('⚠ No recipients found. Add patient mobile numbers or BHW accounts.', true);
+    await DB.logSms({ type, subject, to: currentRecipient, count: 0, sentBy: user?.id });
+    btn.disabled = false; btn.textContent = '📤 Send Now';
+    return;
+  }
+
+  btn.textContent = `📤 Sending to ${unique.length}...`;
+  showToast(`📤 Sending to ${unique.length} recipient${unique.length!==1?'s':''}...`);
+
+  // sendBulk re-checks server online status, then sends in parallel
+  const result = await SMS.sendBulk(unique, subject, body, type, user?.id);
+  const sentCount = result.sent ?? (result.success ? unique.length : 0);
+
+  btn.disabled = false; btn.textContent = '📤 Send Now';
+
+  if (result.demo) {
+    showToast(`⚠ SMS server offline — ${unique.length} recipient${unique.length!==1?'s':''} logged locally. Start server/server.js to send real SMS.`, true);
+  } else if (result.success) {
+    showToast(`✅ Delivered to ${sentCount} of ${unique.length} recipient${unique.length!==1?'s':''}.`);
+  } else {
+    showToast(`⚠ Send failed: ${result.error || 'Unknown error. Check the SMS server.'}`, true);
+  }
+
+  emailLogs = [{ type, subject, recipient_count: sentCount, barangay: targetBrgy||currentRecipient, sent_at: new Date().toISOString() }, ...emailLogs];
+  document.getElementById('stat-emails').textContent = emailLogs.reduce((a,e)=>a+(e.recipient_count||0),0);
+  loadEmailLog();
+}
+
+async function loadEmailLog() {
+  const { data } = await DB.getSmsLogs(10);
+  if (data?.length) emailLogs = data;
+  const el = document.getElementById('email-log');
+  if (!el) return;
+  const logs = emailLogs.slice(0,6);
+  el.innerHTML = logs.map(e=>`
+    <div style="padding:10px 18px;border-bottom:1px solid rgba(45,55,72,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12.5px;font-weight:600">${e.type||'—'}</span>
+        <span class="chip info-chip">${(e.recipient_count||0).toLocaleString()} sent</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${e.barangay||'All'} · ${formatDate(e.sent_at)}</div>
+    </div>`).join('') || '<div class="empty-state" style="padding:20px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></div>No SMS sent yet.</div>';
+}
+
+async function quickAlert(brgy) {
+  // Pre-fill email composer with outbreak warning for this barangay
+  selectedBrgy = brgy;
+  showPage('emailcomposer');
+  setRecipient(null,'specific');
+  document.getElementById('email-brgy-target').value = brgy;
+  document.getElementById('email-type').value = 'warning';
+  updateEmailPreview();
+  showToast(`⚠ Composing outbreak warning for ${brgy}...`);
+}
+
+// ── HISTORY ──────────────────────────────────────────────────
+async function loadHistory() {
+  if (!allCases.length) await loadAll();
+  renderHistory(allCases);
+}
+
+function renderHistory(cases) {
+  const tbody = document.getElementById('history-tbody');
+  if (!cases.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">No cases found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = cases.map(c => `
+    <tr>
+      <td><strong>${c.patient_name}</strong></td>
+      <td>${c.patient_age||'—'} / ${c.patient_sex||'—'}</td>
+      <td>${c.barangay}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
+      <td><span class="chip ${c.severity==='Severe'?'high':c.severity==='Moderate'?'medium':'low'}">${c.severity}</span></td>
+      <td style="font-size:11px;color:var(--muted);max-width:160px">${(c.symptoms||[]).join(', ')}</td>
+      <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':'high'}">${c.status}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${formatDate(c.report_date)}</td>
+      <td>
+        ${c.status==='Pending'?`
+          <button class="btn btn-safe" style="padding:3px 8px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','confirm')">✓</button>
+          <button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','reject')">✕</button>
+        ` : c.status==='Confirmed' ? `
+          <button class="btn ${c.is_active===false?'btn-ghost':'btn-danger'}" style="padding:3px 8px;font-size:11px" title="${c.is_active===false?'Click to reactivate this case':'Click to mark as resolved / inactive'}" onclick="toggleCaseActive('${c.id}', ${c.is_active===false})">${c.is_active===false?'⚪ Inactive':'🔴 Active'}</button>
+        ` : '—'}
+      </td>
+    </tr>`).join('');
+}
+
+function filterByStatus(btn, status) {
+  currentStatusFilter = status;
+  document.querySelectorAll('.history-filters .rec-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  filterHistory();
+}
+
+function filterHistory() {
+  const search = document.getElementById('search-cases').value.toLowerCase();
+  let filtered = allCases;
+  if (currentStatusFilter !== 'all') filtered = filtered.filter(c=>c.status===currentStatusFilter);
+  if (search) filtered = filtered.filter(c=>
+    c.patient_name?.toLowerCase().includes(search) ||
+    c.barangay?.toLowerCase().includes(search) ||
+    c.patient_address?.toLowerCase().includes(search)
+  );
+  renderHistory(filtered);
+}
+
+function exportCSV() {
+  const headers = ['Patient Name','Age','Sex','Address','Barangay','Onset Date','Severity','Symptoms','Status','Report Date','RHU Notes'];
+  const rows = allCases.map(c => [
+    c.patient_name, c.patient_age, c.patient_sex, c.patient_address, c.barangay,
+    c.onset_date, c.severity, (c.symptoms||[]).join(';'), c.status,
+    c.report_date?.split('T')[0], c.rhu_notes||''
+  ]);
+  const csv = [headers,...rows].map(r=>r.map(v=>`"${v||''}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `dengue-cases-janiuay-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+}
+
+function exportAllCSV() { exportCSV(); }
+
+// ── REPORTS ──────────────────────────────────────────────────
+let currentReportKey = 'weekly';
+
+const REPORT_TEMPLATES = [
+  { icon:'📋', name:'Weekly Case Summary',       desc:'Cases per barangay this week',            key:'weekly' },
+  { icon:'📈', name:'Monthly Trend Report',       desc:'Case trends over the selected period',    key:'monthly' },
+  { icon:'🚨', name:'Outbreak Incident Report',   desc:'Barangays that exceeded alert threshold', key:'outbreak' },
+  { icon:'💉', name:'Intervention Activity Log',  desc:'Fogging, cleanup, household visits',      key:'intervention' },
+  { icon:'✉️', name:'SMS Communication Log',      desc:'All advisories sent this period',         key:'email' },
+  { icon:'📊', name:'Quarterly Health Summary',   desc:'Comprehensive municipal overview',        key:'quarterly' },
+];
+
+function renderReportList() {
+  const el = document.getElementById('report-list');
+  if (!el) return;
+  el.innerHTML = REPORT_TEMPLATES.map(r => `
+    <div onclick="selectReport('${r.key}')" id="rpt-tab-${r.key}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .15s;margin-bottom:4px;border:1px solid transparent"
+      onmouseover="if(this.id!='rpt-tab-${currentReportKey}')this.style.background='var(--surface2)'"
+      onmouseout="if(this.id!='rpt-tab-${currentReportKey}')this.style.background=''">
+      <span style="font-size:20px;flex-shrink:0">${r.icon}</span>
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text)">${r.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${r.desc}</div>
+      </div>
+    </div>`).join('');
+  selectReport('weekly');
+}
+
+function selectReport(key) {
+  currentReportKey = key;
+  // Highlight selected tab
+  REPORT_TEMPLATES.forEach(r => {
+    const el = document.getElementById('rpt-tab-' + r.key);
+    if (!el) return;
+    if (r.key === key) {
+      el.style.background = 'var(--info-bg)';
+      el.style.borderColor = 'var(--info)';
+      el.style.color = 'var(--info)';
+    } else {
+      el.style.background = '';
+      el.style.borderColor = 'transparent';
+    }
+  });
+  refreshReportPreview();
+}
+
+function refreshReportPreview() {
+  const wrap = document.getElementById('report-preview-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = buildReportHTML(currentReportKey);
+}
+
+function printReport() {
+  const html = buildReportHTML(currentReportKey);
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Dengue Report</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a202c;background:#fff;padding:0}
+    @media print{body{padding:0}@page{margin:20mm 18mm}}
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 400);
+}
+
+function getDaysFilter() {
+  const v = document.getElementById('report-range')?.value || '14';
+  return v === 'all' ? null : parseInt(v);
+}
+
+function filterByDays(cases, days) {
+  if (!days) return cases;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutStr = cutoff.toISOString().split('T')[0];
+  return cases.filter(c => (c.onset_date || c.report_date || '') >= cutStr);
+}
+
+function buildReportHTML(key) {
+  const days = getDaysFilter();
+  const rangeLabel = days ? `Last ${days} Days` : 'All Time';
+  const preparer = document.getElementById('report-preparer')?.value.trim() || 'RHU Officer';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+  const timeStr = now.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
+  const filtered  = filterByDays(allCases, days);
+  const confirmed = filtered.filter(c => c.status === 'Confirmed');
+  const pending   = filtered.filter(c => c.status === 'Pending');
+  const highRisk  = riskData.filter(r => r.risk === 'High');
+
+  const header = `
+  <div style="background:#1a202c;color:#fff;padding:28px 32px 20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#63b3ed;margin-bottom:6px">Republic of the Philippines</div>
+        <div style="font-size:19px;font-weight:700;letter-spacing:-.3px">Municipality of Janiuay</div>
+        <div style="font-size:13px;color:#a0aec0;margin-top:2px">Rural Health Unit — Dengue Alert System</div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:#a0aec0;line-height:1.8">
+        <div>Date: <strong style="color:#fff">${dateStr}</strong></div>
+        <div>Time: ${timeStr}</div>
+        <div>Period: <strong style="color:#fff">${rangeLabel}</strong></div>
+        <div>Prepared by: <strong style="color:#fff">${preparer}</strong></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.1)">
+      <div style="font-size:15px;font-weight:700;color:#fff">${REPORT_TEMPLATES.find(r=>r.key===key)?.icon} ${REPORT_TEMPLATES.find(r=>r.key===key)?.name || 'Report'}</div>
+      <div style="font-size:11px;color:#a0aec0;margin-top:3px">${REPORT_TEMPLATES.find(r=>r.key===key)?.desc || ''}</div>
+    </div>
+  </div>`;
+
+  const footer = `
+  <div style="border-top:1px solid #e2e8f0;padding:16px 32px;display:flex;justify-content:space-between;font-size:10px;color:#718096;margin-top:24px">
+    <span>Dengue Alert System v1.0 · Municipality of Janiuay, Iloilo</span>
+    <span>Generated: ${dateStr} ${timeStr}</span>
+  </div>`;
+
+  const statBox = (label, val, color='#2d3748') => `
+  <div style="flex:1;min-width:100px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;text-align:center">
+    <div style="font-size:26px;font-weight:700;color:${color}">${val}</div>
+    <div style="font-size:10px;color:#718096;margin-top:3px;text-transform:uppercase;letter-spacing:.06em">${label}</div>
+  </div>`;
+
+  const section = (title, body) => `
+  <div style="padding:20px 32px 0">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#718096;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e2e8f0">${title}</div>
+    ${body}
+  </div>`;
+
+  const table = (headers, rows) => `
+  <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+    <thead><tr>${headers.map(h=>`<th style="text-align:left;padding:8px 10px;background:#f7fafc;border:1px solid #e2e8f0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096">${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.length ? rows.map((r,i)=>`<tr style="background:${i%2?'#f7fafc':'#fff'}">${r.map(c=>`<td style="padding:8px 10px;border:1px solid #e2e8f0;color:#1a202c">${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:14px;text-align:center;color:#a0aec0;border:1px solid #e2e8f0">No records found for this period.</td></tr>`}</tbody>
+  </table>`;
+
+  let body = '';
+
+  if (key === 'weekly' || key === 'monthly') {
+    const brgySummary = {};
+    SYSTEM_CONFIG.barangays.forEach(b => { brgySummary[b] = { confirmed:0, pending:0, severe:0 }; });
+    filtered.forEach(c => {
+      if (!brgySummary[c.barangay]) brgySummary[c.barangay] = { confirmed:0, pending:0, severe:0 };
+      if (c.status === 'Confirmed') { brgySummary[c.barangay].confirmed++; if (c.severity === 'Severe') brgySummary[c.barangay].severe++; }
+      if (c.status === 'Pending')   brgySummary[c.barangay].pending++;
+    });
+    const activeBarangays = Object.entries(brgySummary).filter(([,v]) => v.confirmed + v.pending > 0);
+    const risk = riskData.filter(r => r.risk === 'High').map(r => r.barangay);
+
+    body = `
+    ${section('Summary Statistics', `
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${statBox('Total Cases', filtered.length, '#2d3748')}
+        ${statBox('Confirmed', confirmed.length, '#e53e3e')}
+        ${statBox('Pending', pending.length, '#dd6b20')}
+        ${statBox('High-Risk Barangays', highRisk.length, '#c05621')}
+        ${statBox('Severe Cases', confirmed.filter(c=>c.severity==='Severe').length, '#9b2c2c')}
+      </div>`)}
+    ${section('Cases by Barangay', table(
+      ['Barangay','Confirmed','Pending','Severe','Risk Level'],
+      activeBarangays.sort((a,b)=>b[1].confirmed-a[1].confirmed).map(([brgy,v]) => [
+        `<strong>${brgy}</strong>`,
+        `<span style="color:#e53e3e;font-weight:600">${v.confirmed}</span>`,
+        `<span style="color:#dd6b20">${v.pending}</span>`,
+        v.severe > 0 ? `<span style="color:#9b2c2c;font-weight:600">${v.severe}</span>` : '0',
+        risk.includes(brgy) ? '<span style="background:#fed7d7;color:#9b2c2c;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">HIGH</span>'
+          : riskData.find(r=>r.barangay===brgy)?.risk === 'Medium' ? '<span style="background:#feebc8;color:#c05621;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">MEDIUM</span>'
+          : '<span style="background:#c6f6d5;color:#276749;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">LOW</span>'
+      ])
+    ))}`;
+  }
+
+  else if (key === 'outbreak') {
+    const outbreakBrgys = riskData.filter(r => r.risk === 'High' || r.risk === 'Medium');
+    body = `
+    ${section('Outbreak Status Summary', `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        ${statBox('High-Risk Barangays', highRisk.length, '#e53e3e')}
+        ${statBox('Medium-Risk', riskData.filter(r=>r.risk==='Medium').length, '#dd6b20')}
+        ${statBox('Alert Threshold', SYSTEM_CONFIG.outbreakThreshold + ' active cases', '#2d3748')}
+      </div>
+      ${outbreakBrgys.length ? '' : '<div style="padding:20px;text-align:center;color:#718096;background:#f7fafc;border-radius:8px;border:1px solid #e2e8f0">✅ No barangays currently at outbreak risk.</div>'}`)}
+    ${outbreakBrgys.length ? section('Affected Barangays', table(
+      ['Barangay','Active Cases','Severe Cases','Risk Level','Status'],
+      outbreakBrgys.sort((a,b)=>b.cases-a.cases).map(r => {
+        const brgyCases = allCases.filter(c => c.barangay === r.barangay && c.status === 'Confirmed');
+        const sevCount  = brgyCases.filter(c => c.severity === 'Severe').length;
+        const riskColor = r.risk === 'High' ? '#9b2c2c' : '#c05621';
+        const riskBg    = r.risk === 'High' ? '#fed7d7' : '#feebc8';
+        return [
+          `<strong>${r.barangay}</strong>`,
+          `<strong style="color:${riskColor}">${r.cases}</strong>`,
+          sevCount > 0 ? `<strong style="color:#9b2c2c">${sevCount}</strong>` : '0',
+          `<span style="background:${riskBg};color:${riskColor};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">${r.risk.toUpperCase()}</span>`,
+          r.risk === 'High' ? '⚠️ OUTBREAK RISK' : '⚡ MONITOR CLOSELY'
+        ];
+      })
+    )) : ''}
+    ${section('Recommended Actions', `
+      <ul style="padding-left:18px;color:#2d3748;line-height:2;font-size:12px">
+        <li>Immediately conduct fogging operations in all high-risk barangays</li>
+        <li>Deploy BHW teams for household visits and source reduction activities</li>
+        <li>Coordinate with the municipal health officer for resource mobilization</li>
+        <li>Send advisories to affected residents via the SMS alert system</li>
+        <li>Report to the Provincial Health Office within 24 hours if threshold is exceeded</li>
+      </ul>`)}`;
+  }
+
+  else if (key === 'email') {
+    const recentLogs = emailLogs.slice(0, 50);
+    body = `
+    ${section('SMS Communication Summary', `
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${statBox('Total SMS Sent', emailLogs.reduce((a,e)=>a+(e.recipient_count||0),0), '#2b6cb0')}
+        ${statBox('Total Batches', emailLogs.length, '#2d3748')}
+        ${statBox('Advisories', emailLogs.filter(e=>e.type==='advisory'||e.type==='prevention').length, '#276749')}
+        ${statBox('Warnings', emailLogs.filter(e=>e.type==='warning'||e.type==='outbreak').length, '#9b2c2c')}
+      </div>`)}
+    ${section('SMS Log', table(
+      ['Type','Subject','Sent To','Recipients','Sent At'],
+      recentLogs.map(e => [
+        e.type || 'Advisory',
+        e.subject || '—',
+        e.recipient_to || 'All',
+        e.recipient_count || 1,
+        formatDate(e.sent_at)
+      ])
+    ))}`;
+  }
+
+  else if (key === 'intervention') {
+    body = `
+    ${section('Intervention Summary', `
+      <div style="padding:16px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#718096;line-height:1.8">
+        This report shows fogging operations, cleanup drives, and household visits logged through the system.
+        Use the RHU dashboard to log new interventions and they will appear here automatically.
+      </div>`)}
+    ${section('Confirmed Cases by Barangay (for intervention planning)', table(
+      ['Barangay','Confirmed Cases','Risk Level','Suggested Action'],
+      riskData.filter(r=>r.cases>0).sort((a,b)=>b.cases-a.cases).map(r=>[
+        `<strong>${r.barangay}</strong>`,
+        r.cases,
+        r.risk === 'High' ? '<span style="color:#9b2c2c;font-weight:600">HIGH</span>' : r.risk === 'Medium' ? '<span style="color:#c05621">MEDIUM</span>' : '<span style="color:#276749">LOW</span>',
+        r.risk === 'High' ? 'Immediate fogging + household visits' : r.risk === 'Medium' ? 'Source reduction + monitoring' : 'Routine surveillance'
+      ])
+    ))}`;
+  }
+
+  else if (key === 'quarterly') {
+    const severeCases  = confirmed.filter(c => c.severity === 'Severe');
+    const moderateCases = confirmed.filter(c => c.severity === 'Moderate');
+    const mildCases    = confirmed.filter(c => c.severity === 'Mild');
+    body = `
+    ${section('Municipal Overview', `
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${statBox('Total Recorded', allCases.length, '#2d3748')}
+        ${statBox('Confirmed', allCases.filter(c=>c.status==='Confirmed').length, '#e53e3e')}
+        ${statBox('Recovered', allCases.filter(c=>c.status==='Recovered').length, '#276749')}
+        ${statBox('Severe Cases', allCases.filter(c=>c.severity==='Severe').length, '#9b2c2c')}
+        ${statBox('SMS Sent', emailLogs.reduce((a,e)=>a+(e.recipient_count||0),0), '#2b6cb0')}
+        ${statBox('High-Risk Brgy', highRisk.length, '#c05621')}
+      </div>`)}
+    ${section('Severity Breakdown', table(
+      ['Severity Level','Case Count','Percentage'],
+      [
+        ['🔴 Severe',   severeCases.length,   confirmed.length ? Math.round(severeCases.length/confirmed.length*100)+'%' : '0%'],
+        ['🟠 Moderate', moderateCases.length, confirmed.length ? Math.round(moderateCases.length/confirmed.length*100)+'%' : '0%'],
+        ['🟢 Mild',     mildCases.length,     confirmed.length ? Math.round(mildCases.length/confirmed.length*100)+'%' : '0%'],
+      ]
+    ))}
+    ${section('Top Affected Barangays', table(
+      ['Rank','Barangay','Total Confirmed','Severe','Risk'],
+      riskData.filter(r=>r.cases>0).sort((a,b)=>b.cases-a.cases).slice(0,10).map((r,i)=>{
+        const sevCount = allCases.filter(c=>c.barangay===r.barangay&&c.severity==='Severe').length;
+        return [`<strong>#${i+1}</strong>`,`<strong>${r.barangay}</strong>`,r.cases,sevCount,r.risk];
+      })
+    ))}`;
+  }
+
+  return `
+  <div style="background:#fff;width:100%;font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a202c">
+    ${header}
+    ${body}
+    <div style="padding:20px 32px">
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;font-size:11px;color:#718096;line-height:1.7">
+        <strong style="color:#2d3748">Certification:</strong> This report was generated automatically by the Dengue Alert System of the Municipality of Janiuay, Iloilo.
+        Data reflects case submissions from Barangay Health Workers reviewed by the Rural Health Unit.
+        <br><br>
+        <span style="display:inline-block;margin-top:32px;border-top:1px solid #2d3748;padding-top:4px;width:220px">
+          ${preparer}<br>RHU Officer / Authorized Signatory
+        </span>
+      </div>
+    </div>
+    ${footer}
+  </div>`;
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────
+function saveSettings() {
+  SYSTEM_CONFIG.outbreakThreshold = parseInt(document.getElementById('s-threshold').value) || 5;
+  showToast('✅ Settings saved.');
+}
+
+// ── THEME ─────────────────────────────────────────────────────
+function setTheme(mode) {
+  if (mode === 'light') {
+    document.body.classList.add('light-mode');
+    localStorage.setItem('dengue_theme', 'light');
+  } else {
+    document.body.classList.remove('light-mode');
+    localStorage.setItem('dengue_theme', 'dark');
+  }
+  updateThemeUI();
+}
+function updateThemeUI() {
+  const isLight = document.body.classList.contains('light-mode');
+  const darkBtn  = document.getElementById('theme-dark-btn');
+  const lightBtn = document.getElementById('theme-light-btn');
+  const statusEl = document.getElementById('theme-status');
+  if (!darkBtn) return;
+  if (isLight) {
+    darkBtn.className  = 'btn btn-secondary';
+    lightBtn.className = 'btn btn-primary';
+    if (statusEl) statusEl.textContent = 'Current: Light Mode';
+  } else {
+    darkBtn.className  = 'btn btn-primary';
+    lightBtn.className = 'btn btn-secondary';
+    if (statusEl) statusEl.textContent = 'Current: Dark Mode';
+  }
+}
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('dengue_theme');
+  if (saved === 'light') document.body.classList.add('light-mode');
+})();
+
+
+// ── BHW INBOX ────────────────────────────────────────────────
+let allInboxMessages = [];
+let currentInboxMsg  = null;
+
+const INBOX_TYPE_ICONS     = { fogging:'💨', cleanup:'🧹', update:'📋', concern:'⚠️', supply:'📦' };
+const INBOX_PRIORITY_COLOR = { normal:'var(--safe)', urgent:'var(--warn)', critical:'var(--accent)' };
+const INBOX_PRIORITY_ICON  = { normal:'🟢', urgent:'🟠', critical:'🔴' };
+
+async function loadInbox() {
+  const listEl = document.getElementById('inbox-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Loading...</div>';
+
+  try {
+    // No .where() here — avoids needing a composite Firestore index
+    const snap = await firebase.firestore()
+      .collection('rhu_messages')
+      .orderBy('sentAt', 'desc')
+      .limit(100)
+      .get();
+
+    allInboxMessages = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderInbox(allInboxMessages);
+    updateInboxStats(allInboxMessages);
+
+    // Populate barangay filter
+    const brgys = [...new Set(allInboxMessages.map(m => m.barangay).filter(Boolean))].sort();
+    const brgyFilter = document.getElementById('inbox-filter-brgy');
+    if (brgyFilter) {
+      const existing = brgyFilter.value;
+      brgyFilter.innerHTML = '<option value="">All Barangays</option>' +
+        brgys.map(b => `<option value="${b}"${b === existing ? ' selected' : ''}>${b}</option>`).join('');
+    }
+
+    // Update badge
+    const unread = allInboxMessages.filter(m => m.status === 'unread').length;
+    const badge = document.getElementById('inbox-badge');
+    if (badge) {
+      badge.textContent = unread;
+      badge.style.display = unread > 0 ? '' : 'none';
+    }
+  } catch(e) {
+    listEl.innerHTML = `<div class="empty-state" style="padding:40px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19L12 3.5z"/><path d="M12 9.8v4.4"/><circle cx="12" cy="17" r="0.15" fill="currentColor"/></svg></div>${e.message}<br><small style="color:var(--muted);font-size:11px">Make sure Firestore rules allow rhu_messages access</small></div>`;
+  }
+}
+
+function renderInbox(msgs) {
+  const listEl = document.getElementById('inbox-list');
+  const countEl = document.getElementById('inbox-count-label');
+  if (!listEl) return;
+
+  if (countEl) countEl.textContent = `${msgs.length} message${msgs.length !== 1 ? 's' : ''}`;
+
+  if (!msgs.length) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:40px"><div class="icon"><svg width="22" height="22" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3.5 6 12 13 20.5 6"/></svg></div>No messages found.</div>';
+    return;
+  }
+
+  listEl.innerHTML = msgs.map(m => {
+    const icon   = INBOX_TYPE_ICONS[m.subtype] || '📋';
+    const pcol   = INBOX_PRIORITY_COLOR[m.priority] || 'var(--muted)';
+    const picon  = INBOX_PRIORITY_ICON[m.priority]  || '🟢';
+    const isUnread = m.status === 'unread';
+    const safeId = m.id.replace(/[^a-zA-Z0-9]/g,'_');
+    return `
+    <div id="inbox-row-${safeId}" style="border-bottom:1px solid rgba(45,55,72,0.4);${isUnread ? 'border-left:3px solid var(--info);' : ''}">
+      <!-- Row header (click to toggle) -->
+      <div onclick="toggleInboxRow('${m.id}')" style="padding:14px 18px;cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:7px;min-width:0">
+            <span style="font-size:15px;flex-shrink:0">${icon}</span>
+            <span style="font-size:13px;font-weight:${isUnread ? '700' : '500'};color:${isUnread ? 'var(--text)' : 'var(--muted)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.subject}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(45,55,72,0.5);color:${pcol}">${picon} ${(m.priority||'normal').charAt(0).toUpperCase()+(m.priority||'normal').slice(1)}</span>
+            <span id="inbox-chevron-${safeId}" style="font-size:11px;color:var(--muted);transition:transform .2s">▼</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:11.5px;color:var(--muted)">${m.senderName || 'BHW'} · <strong style="color:var(--info)">${m.barangay || '—'}</strong></span>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${isUnread ? '<div style="width:7px;height:7px;background:var(--info);border-radius:50%;box-shadow:0 0 6px var(--info)"></div>' : ''}
+            <span style="font-size:10.5px;color:var(--muted);font-family:'DM Mono',monospace">${formatDateShort(m.sentAt)}</span>
+          </div>
+        </div>
+      </div>
+      <!-- Expandable detail dropdown -->
+      <div id="inbox-detail-${safeId}" style="display:none;background:var(--surface2);border-top:1px solid var(--border);padding:18px 20px;animation:fadeIn .15s ease">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;font-size:12px;color:var(--muted)">
+          <span>👤 <strong style="color:var(--text)">${m.senderName || 'BHW'}</strong></span>
+          <span style="color:var(--border)">·</span>
+          <span>🏘️ <strong style="color:var(--info)">${m.barangay || '—'}</strong></span>
+          <span style="color:var(--border)">·</span>
+          <span>📅 ${formatDate(m.sentAt)}</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.7;max-height:300px;overflow-y:auto">${m.body || '—'}</div>
+        ${m.rhuNote ? `<div style="margin-top:10px;padding:10px 12px;background:var(--safe-bg);border:1px solid rgba(72,187,120,0.3);border-radius:7px;font-size:12.5px;color:var(--safe)">📝 RHU Note: ${m.rhuNote}</div>` : ''}
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start">
+          <div style="flex:1;min-width:200px">
+            <textarea id="inbox-note-${safeId}" class="form-input" rows="2" style="width:100%;font-size:12px;resize:none" placeholder="Add a note or action taken...">${m.rhuNote || ''}</textarea>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="saveInboxNote('${m.id}','${safeId}')">💾 Save Note</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="markMsgRead('${m.id}')">✓ Mark Read</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterInbox() {
+  const brgy   = document.getElementById('inbox-filter-brgy')?.value   || '';
+  const type   = document.getElementById('inbox-filter-type')?.value   || '';
+  const status = document.getElementById('inbox-filter-status')?.value || '';
+
+  let filtered = allInboxMessages;
+  if (brgy)   filtered = filtered.filter(m => m.barangay === brgy);
+  if (type)   filtered = filtered.filter(m => m.subtype  === type);
+  if (status) filtered = filtered.filter(m => m.status   === status);
+  renderInbox(filtered);
+}
+
+function toggleInboxRow(id) {
+  const msg = allInboxMessages.find(m => m.id === id);
+  if (!msg) return;
+  currentInboxMsg = msg;
+  const safeId = id.replace(/[^a-zA-Z0-9]/g,'_');
+  const detailEl  = document.getElementById('inbox-detail-' + safeId);
+  const chevronEl = document.getElementById('inbox-chevron-' + safeId);
+  if (!detailEl) return;
+
+  const isOpen = detailEl.style.display !== 'none';
+  // Close all other open rows first
+  document.querySelectorAll('[id^="inbox-detail-"]').forEach(el => { el.style.display = 'none'; });
+  document.querySelectorAll('[id^="inbox-chevron-"]').forEach(el => { el.style.transform = ''; });
+
+  if (!isOpen) {
+    detailEl.style.display = 'block';
+    if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
+    // Mark as read in Firestore silently
+    if (msg.status === 'unread') markMsgRead(id, true);
+  }
+}
+
+async function saveInboxNote(id, safeId) {
+  const note = document.getElementById('inbox-note-' + safeId)?.value.trim();
+  if (!note) { showToast('⚠ Please enter a note.', true); return; }
+  try {
+    await firebase.firestore().collection('rhu_messages').doc(id).update({ rhuNote: note, status: 'read' });
+    const msg = allInboxMessages.find(m => m.id === id);
+    if (msg) { msg.rhuNote = note; msg.status = 'read'; }
+    showToast('✅ Note saved!');
+    updateInboxStats(allInboxMessages);
+  } catch(e) { showToast('⚠ ' + e.message, true); }
+}
+
+async function openInboxMsg(id) {
+  toggleInboxRow(id);
+}
+
+async function markMsgRead(id, silent = false) {
+  try {
+    await firebase.firestore().collection('rhu_messages').doc(id).update({ status: 'read' });
+    const msg = allInboxMessages.find(m => m.id === id);
+    if (msg) msg.status = 'read';
+    if (!silent) {
+      showToast('✓ Marked as read');
+      renderInbox(allInboxMessages);
+      updateInboxStats(allInboxMessages);
+      const badge = document.getElementById('inbox-badge');
+      const unread = allInboxMessages.filter(m => m.status === 'unread').length;
+      if (badge) { badge.textContent = unread; badge.style.display = unread > 0 ? '' : 'none'; }
+    }
+  } catch(e) { if (!silent) showToast('⚠ ' + e.message, true); }
+}
+
+async function replyToMessage() {
+  if (!currentInboxMsg) return;
+  const safeId = currentInboxMsg.id.replace(/[^a-zA-Z0-9]/g,'_');
+  saveInboxNote(currentInboxMsg.id, safeId);
+}
+
+function updateInboxStats(msgs) {
+  const unread  = msgs.filter(m => m.status === 'unread').length;
+  const urgent  = msgs.filter(m => m.priority === 'urgent' || m.priority === 'critical').length;
+  const fogging = msgs.filter(m => m.subtype === 'fogging').length;
+  const setEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  setEl('inbox-stat-unread',  unread);
+  setEl('inbox-stat-total',   msgs.length);
+  setEl('inbox-stat-urgent',  urgent);
+  setEl('inbox-stat-fogging', fogging);
+}
+
+function formatDateShort(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  const now = new Date();
+  const diff = now - dt;
+  if (diff < 3600000)  return Math.floor(diff/60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+  return dt.toLocaleDateString('en-PH', { month:'short', day:'numeric' });
+}
+// ── END BHW INBOX ─────────────────────────────────────────────
+
+// ── MOBILE SIDEBAR ────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar  = document.querySelector('.sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const burger   = document.getElementById('hamburger');
+  const isOpen   = sidebar.classList.toggle('mobile-open');
+  overlay.classList.toggle('open', isOpen);
+  burger.classList.toggle('open', isOpen);
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+}
+
+async function testEmailSMTP() {
+  const statusEl = document.getElementById('smtp-status');
+  statusEl.textContent = '⏳ Testing SMS connection...';
+  statusEl.style.color = 'var(--muted)';
+  const result = await SMS.testConnection();
+  if (result.success) {
+    statusEl.textContent = '✅ Semaphore connected! ' + (result.message || '');
+    statusEl.style.color = 'var(--safe)';
+    showToast('✅ SMS connection successful!');
+  } else {
+    statusEl.textContent = '⚠ ' + (result.message || 'SMS server not reachable. Is server/server.js running?');
+    statusEl.style.color = 'var(--accent)';
+    showToast('⚠ SMS server not reachable. Check server/.env and run node server.js', true);
+  }
+}
+
+async function testDB() {
+  try {
+    const cases = _store.getCases();
+    showToast(`✅ Local storage OK — ${cases.length} case(s) stored.`);
+  } catch(e) { showToast('⚠ Storage error: ' + e.message, true); }
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function showModal(title, body, confirmText, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-confirm').textContent = confirmText||'Confirm';
+  document.getElementById('modal-confirm').onclick = async () => {
+    if (onConfirm) {
+      // If handler returns exactly false, keep modal open (validation failed)
+      const result = await onConfirm();
+      if (result === false) return;
+    }
+    closeModal();
+  };
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+// ── TOAST ────────────────────────────────────────────────────
+function showToast(msg, isWarn=false) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.style.borderColor = isWarn ? 'rgba(245,101,101,0.4)' : 'var(--border)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+
+// ── REALTIME POLLING (checks for updates every 30s) ──────────
+setInterval(() => {
+  if (document.visibilityState === 'visible') loadDashboard();
+}, 30000);
+
+// ── INIT ─────────────────────────────────────────────────────
+loadAll();
+updateEmailPreview();
+// Pre-load inbox badge count
+(async () => {
+  try {
+    const snap = await firebase.firestore().collection('rhu_messages').limit(50).get();
+    const count = snap.docs.filter(d => d.data().status === 'unread').length;
+    const badge = document.getElementById('inbox-badge');
+    if (badge && count > 0) { badge.textContent = count; badge.style.display = ''; }
+  } catch(e) { /* silently fail */ }
+})();
+
+// Pre-load BHW accounts pending badge
+(async () => {
+  try {
+    let count = 0;
+    if (_isConfigured) {
+      // Fetch pending accounts — accept both role:'bhw' and legacy role:'barangay'
+      const snap = await db.collection('bhw_accounts').where('status', '==', 'pending').get();
+      count = snap.size;
+    } else {
+      const accounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+      count = accounts.filter(a => a.status === 'pending').length;
+    }
+    const badge = document.getElementById('accounts-badge');
+    if (badge && count > 0) { badge.textContent = count; badge.style.display = ''; }
+  } catch(e) { /* silently fail */ }
+})();
+
+// Show SMTP status on settings page when visited
+async function testFirestore() {
+  const el = document.getElementById('db-status');
+  if (!el) return;
+  el.textContent = '🔄 Testing Firestore connection...';
+  el.style.background = 'var(--surface2)';
+  try {
+    const snap = await db.collection('dengue_cases').limit(1).get();
+    el.textContent = '✅ Firestore connected — ' + SYSTEM_CONFIG.municipality + ' database is live.';
+    el.style.background = 'var(--safe-bg)';
+    el.style.color = 'var(--safe)';
+  } catch(e) {
+    el.textContent = '❌ Firestore error: ' + e.message;
+    el.style.background = 'var(--critical-bg)';
+    el.style.color = 'var(--accent)';
+  }
+}
+
+async function updateSmtpStatus() {
+  const el = document.getElementById('smtp-status');
+  if (!el) return;
+
+  // Also update Firestore status if on settings page
+  const dbEl = document.getElementById('db-status');
+  if (dbEl) {
+    try {
+      await db.collection('dengue_cases').limit(1).get();
+      dbEl.textContent = '✅ Firestore connected — database is live.';
+      dbEl.style.background = 'var(--safe-bg)';
+      dbEl.style.color = 'var(--safe)';
+    } catch(e) {
+      dbEl.textContent = '⚠ Firestore: ' + e.message;
+    }
+  }
+  const online = await SMS.checkServer();
+  el.textContent = online
+    ? '✅ SMS server is online and ready'
+    : '⚠ SMS server offline — run: cd server && node server.js';
+  el.style.color = online ? 'var(--safe)' : 'var(--warn)';
+}
+
+// ── BHW ACCOUNTS MANAGEMENT ──────────────────────────────────
+let allBhwAccounts = [];
+
+async function loadAccounts() {
+  const tbody = document.getElementById('acc-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Loading...</td></tr>';
+
+  try {
+    if (_isConfigured) {
+      // Fetch all docs — filter & sort client-side to avoid composite index requirement
+      // Accepts both role:'bhw' and legacy role:'barangay'
+      const snap = await db.collection('bhw_accounts').get();
+      allBhwAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(a => a.role === 'bhw' || a.role === 'barangay')
+        .sort((a,b) => (b.registered_at||'').localeCompare(a.registered_at||''));
+    } else {
+      allBhwAccounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+      allBhwAccounts.sort((a,b) => (b.registered_at||'').localeCompare(a.registered_at||''));
+    }
+    renderAccounts(allBhwAccounts);
+
+    // Update pending badge in sidebar
+    const pending = allBhwAccounts.filter(a => a.status === 'pending').length;
+    const badge = document.getElementById('accounts-badge');
+    if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? '' : 'none'; }
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--accent)">${e.message}</td></tr>`;
+  }
+}
+
+function renderAccounts(accounts) {
+  const tbody   = document.getElementById('acc-table-body');
+  const countEl = document.getElementById('acc-count-label');
+  if (!tbody) return;
+
+  if (countEl) countEl.textContent = `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`;
+
+  // Stats
+  const pending  = accounts.filter(a => a.status === 'pending').length;
+  const approved = accounts.filter(a => a.status === 'approved').length;
+  const rejected = accounts.filter(a => a.status === 'rejected').length;
+  const sp = document.getElementById('acc-stat-pending');
+  const sa = document.getElementById('acc-stat-approved');
+  const sr = document.getElementById('acc-stat-rejected');
+  if (sp) sp.textContent = pending;
+  if (sa) sa.textContent = approved;
+  if (sr) sr.textContent = rejected;
+
+  if (!accounts.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">No accounts found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = accounts.map(a => {
+    const statusChip =
+      a.status === 'pending'  ? '<span class="chip pending">⏳ Pending</span>' :
+      a.status === 'approved' ? '<span class="chip low">✅ Approved</span>' :
+      '<span class="chip high">❌ Rejected</span>';
+
+    const actions =
+      a.status === 'pending' ? `
+        <button class="btn btn-safe" style="font-size:11px;padding:4px 10px;margin-right:4px" onclick="reviewAccount('${a.id}','approved')">✅ Approve</button>
+        <button class="btn btn-warn" style="font-size:11px;padding:4px 10px" onclick="reviewAccount('${a.id}','rejected')">❌ Reject</button>
+      ` : a.status === 'approved' ? `
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-right:4px" onclick="reviewAccount('${a.id}','rejected')">Revoke</button>
+      ` : `
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="reviewAccount('${a.id}','approved')">Re-approve</button>
+      `;
+
+    return `<tr>
+      <td style="font-weight:600">${a.name || '—'}</td>
+      <td><span style="color:var(--info)">${a.barangay || '—'}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${a.email || '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${a.phone || '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${a.registered_at ? new Date(a.registered_at).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'}) : '—'}</td>
+      <td>${statusChip}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterAccounts() {
+  const status = document.getElementById('acc-filter-status')?.value || '';
+  const filtered = status ? allBhwAccounts.filter(a => a.status === status) : allBhwAccounts;
+  renderAccounts(filtered);
+}
+
+function reviewAccount(id, newStatus) {
+  const label     = newStatus === 'approved' ? 'Approve' : newStatus === 'rejected' ? 'Reject' : 'Revoke';
+  const emoji     = newStatus === 'approved' ? '✅' : newStatus === 'rejected' ? '❌' : '🔒';
+  const btnClass  = newStatus === 'approved' ? 'btn-safe' : 'btn-danger';
+  const bodyText  = newStatus === 'approved'
+    ? 'This BHW will be able to log in and submit dengue cases.'
+    : newStatus === 'rejected'
+    ? 'This registration will be marked as rejected. The BHW will not be able to log in.'
+    : 'This will revoke the BHW\'s access. They will no longer be able to log in.';
+
+  // Swap confirm button style to match action
+  const confirmBtn = document.getElementById('modal-confirm');
+  confirmBtn.className = `btn ${btnClass}`;
+
+  showModal(
+    `${emoji} ${label} Account`,
+    `<p style="margin:0">${bodyText}</p>`,
+    `${emoji} ${label}`,
+    async () => {
+      try {
+        if (_isConfigured) {
+          await db.collection('bhw_accounts').doc(id).update({ status: newStatus, reviewed_at: new Date().toISOString() });
+        } else {
+          const accounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+          const idx = accounts.findIndex(a => a.id === id);
+          if (idx !== -1) { accounts[idx].status = newStatus; accounts[idx].reviewed_at = new Date().toISOString(); }
+          localStorage.setItem('bhw_accounts', JSON.stringify(accounts));
+        }
+        showToast(newStatus === 'approved' ? '✅ Account approved — BHW can now log in.' : newStatus === 'rejected' ? '❌ Account rejected.' : '🔒 Account revoked.');
+        await loadAccounts();
+      } catch(e) {
+        showToast('⚠ Failed: ' + e.message, true);
+      }
+    }
+  );
+}
+</script>
+</body>
+</html>

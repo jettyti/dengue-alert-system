@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dengue Alert — Janiuay Login</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1f2937;
+    --border: #2d3748;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --accent: #f56565;
+    --accent2: #fc8181;
+    --warn: #ed8936;
+    --safe: #48bb78;
+    --info: #63b3ed;
+    --radius: 10px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(245,101,101,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(99,179,237,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 50% 50%, rgba(237,137,54,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(45,55,72,0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45,55,72,0.3) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Full-width layout with side panels */
+  .login-page {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1200px;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr 460px 1fr;
+    gap: 32px;
+    align-items: center;
+    min-height: 100vh;
+    animation: fade-in 0.5s ease;
+  }
+
+  .login-wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 460px;
+    animation: fade-in 0.5s ease;
+  }
+
+  /* Side tip panels */
+  .tips-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    animation: fade-in 0.7s ease;
+  }
+  .tips-panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tip-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: border-color 0.2s;
+  }
+  .tip-card:hover { border-color: var(--muted); }
+  .tip-card.danger { border-left: 3px solid var(--accent); }
+  .tip-card.warn   { border-left: 3px solid var(--warn); }
+  .tip-card.safe   { border-left: 3px solid var(--safe); }
+  .tip-card.info   { border-left: 3px solid var(--info); }
+  .tip-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .tip-card-icon { font-size: 18px; }
+  .tip-card-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
+  .tip-card-body { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .tip-card-body ul { padding-left: 14px; margin-top: 4px; }
+  .tip-card-body li { margin-bottom: 3px; }
+  .stat-row { display: flex; justify-content: space-between; margin-top: 8px; gap: 8px; }
+  .mini-stat { flex: 1; background: var(--surface2); border-radius: 8px; padding: 8px 10px; text-align: center; }
+  .mini-stat-val { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; }
+  .mini-stat-val.red { color: var(--accent); }
+  .mini-stat-val.orange { color: var(--warn); }
+  .mini-stat-val.green { color: var(--safe); }
+  .mini-stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  @keyframes fade-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+  .brand {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .brand-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 12px;
+    filter: drop-shadow(0 0 20px rgba(245,101,101,0.4));
+    animation: pulse-icon 3s ease infinite;
+  }
+
+  @keyframes pulse-icon {
+    0%, 100% { filter: drop-shadow(0 0 16px rgba(245,101,101,0.3)); }
+    50% { filter: drop-shadow(0 0 28px rgba(245,101,101,0.6)); }
+  }
+
+  .brand-name {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .brand-name span { color: var(--accent); }
+
+  .brand-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  /* Role selector */
+  .role-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .role-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .role-card:hover { border-color: var(--muted); background: var(--surface2); }
+
+  .role-card.active-brgy {
+    border-color: var(--info);
+    background: rgba(99,179,237,0.08);
+  }
+
+  .role-card.active-rhu {
+    border-color: var(--accent);
+    background: rgba(245,101,101,0.08);
+  }
+
+  .role-icon { font-size: 28px; margin-bottom: 6px; }
+  .role-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .role-desc { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.3; }
+
+  /* Login card */
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  }
+
+  .login-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .login-header-icon { font-size: 18px; }
+
+  .login-header-text .title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .login-header-text .sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+  .login-body { padding: 24px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--muted); opacity: 0.6; }
+
+  .brgy-select-wrap { position: relative; }
+  .brgy-select-wrap::after {
+    content: '▾';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .form-input option { background: var(--surface2); }
+
+  .btn-login {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .btn-login.brgy { background: var(--info); color: #0c1a2e; }
+  .btn-login.brgy:hover { background: #90cdf4; }
+  .btn-login.rhu { background: var(--accent); color: white; }
+  .btn-login.rhu:hover { background: var(--accent2); }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error-msg {
+    background: rgba(245,101,101,0.12);
+    border: 1px solid rgba(245,101,101,0.3);
+    border-radius: 7px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: var(--accent);
+    margin-bottom: 14px;
+    display: none;
+  }
+
+  .divider {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin: 16px 0;
+    position: relative;
+  }
+
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+
+  .demo-info {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .demo-info strong { color: var(--text); }
+
+  .pw-wrap { position: relative; }
+  .pw-wrap .form-input { padding-right: 44px; }
+  .pw-toggle {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 16px; padding: 2px; line-height: 1; transition: color 0.15s;
+  }
+  .pw-toggle:hover { color: var(--text); }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .version-tag {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 20px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── LIGHT MODE ─────────────────────────────────────────── */
+  body.light-mode {
+    --bg: #f0f4f8; --surface: #ffffff; --surface2: #e8edf3; --border: #cbd5e0;
+    --text: #1a202c; --muted: #718096; --accent: #e53e3e; --accent2: #fc8181;
+    --warn: #dd6b20; --safe: #276749; --info: #2b6cb0;
+  }
+  body.light-mode body::before { opacity: 0.5; }
+  body.light-mode .grid-bg { opacity: 0.4; }
+
+  /* ── RESPONSIVE ─────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .login-page { grid-template-columns: 1fr 460px; }
+    .tips-panel:last-child { display: none; }
+  }
+  @media (max-width: 760px) {
+    .login-page { grid-template-columns: 1fr; padding: 16px; min-height: auto; }
+    .tips-panel { display: none; }
+    .login-wrap { max-width: 100%; }
+  }
+  @media (max-width: 520px) {
+    .login-wrap { padding: 0; }
+    .brand-icon { font-size: 38px; }
+    .brand-name { font-size: 22px; }
+    .role-selector { gap: 8px; }
+    .role-card { padding: 12px 10px; }
+    .role-icon { font-size: 22px; }
+    .login-body { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="login-page">
+
+<!-- LEFT TIPS PANEL -->
+<div class="tips-panel">
+  <div class="tips-panel-title"><svg width="14" height="14" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12.7" cy="12.7" rx="2.3" ry="4.1" transform="rotate(20 12.7 12.7)"/><path d="M11 9.2 7.2 3.8"/><path d="M7.7 10.3 2.7 8M8.3 13 2.7 12.5M9.1 15.7 4.3 18"/><path d="M15.5 11.9 21.2 10.5M16.3 14.4l5 1.9M14.9 9.3l4.3-3.6"/><circle cx="7.2" cy="3.8" r="0.7" fill="currentColor" stroke="none"/></svg> Know Your Enemy</div>
+
+  <div class="tip-card danger">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19L12 3.5z"/><path d="M12 9.8v4.4"/><circle cx="12" cy="17" r="0.15" fill="currentColor"/></svg></span>
+      <span class="tip-card-label">Warning Signs</span>
+    </div>
+    <div class="tip-card-body">
+      Watch for these serious symptoms — seek hospital care <strong style="color:var(--accent)">immediately</strong>:
+      <ul>
+        <li>Severe abdominal pain</li>
+        <li>Persistent vomiting</li>
+        <li>Bleeding gums or nose</li>
+        <li>Rapid breathing or fatigue</li>
+        <li>Blood in urine, stools, or vomit</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="tip-card warn">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4.2a1.8 1.8 0 0 1 3.6 0v9.3a4 4 0 1 1-3.6 0V4.2z"/><circle cx="12.8" cy="17" r="1.3" fill="currentColor" stroke="none"/></svg></span>
+      <span class="tip-card-label">Classic Symptoms</span>
+    </div>
+    <div class="tip-card-body">
+      Dengue fever typically begins <strong style="color:var(--warn)">2–7 days</strong> after a mosquito bite:
+      <ul>
+        <li>Sudden high fever (38–40°C)</li>
+        <li>Severe headache &amp; eye pain</li>
+        <li>Muscle and joint aches</li>
+        <li>Skin rash after 2–5 days</li>
+        <li>Nausea and vomiting</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="tip-card info">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="2" width="4" height="18" rx="1"/></svg></span>
+      <span class="tip-card-label">Dengue in the Philippines</span>
+    </div>
+    <div class="tip-card-body">
+      <div class="stat-row">
+        <div class="mini-stat"><div class="mini-stat-val red">~200K</div><div class="mini-stat-label">Annual Cases</div></div>
+        <div class="mini-stat"><div class="mini-stat-val orange">Jun–Oct</div><div class="mini-stat-label">Peak Season</div></div>
+        <div class="mini-stat"><div class="mini-stat-val green">Early</div><div class="mini-stat-label">Best Treatment</div></div>
+      </div>
+      <div style="margin-top:8px">The Philippines is endemic for all 4 dengue serotypes. Early reporting saves lives.</div>
+    </div>
+  </div>
+</div>
+
+<!-- CENTER LOGIN -->
+<div class="login-wrap">
+
+  <div class="brand">
+    <span class="brand-icon"><svg width="48" height="48" style="vertical-align:middle;display:block;margin:0 auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12.7" cy="12.7" rx="2.3" ry="4.1" transform="rotate(20 12.7 12.7)"/><path d="M11 9.2 7.2 3.8"/><path d="M7.7 10.3 2.7 8M8.3 13 2.7 12.5M9.1 15.7 4.3 18"/><path d="M15.5 11.9 21.2 10.5M16.3 14.4l5 1.9M14.9 9.3l4.3-3.6"/><circle cx="7.2" cy="3.8" r="0.7" fill="currentColor" stroke="none"/></svg></span>
+    <div class="brand-name"><span>Dengue</span> Alert</div>
+    <div class="brand-sub">Municipality of Janiuay, Iloilo<br>Intelligent Early Warning System</div>
+  </div>
+
+  <!-- Role selector -->
+  <div class="role-selector">
+    <div class="role-card active-brgy" id="role-brgy" onclick="selectRole('barangay')">
+      <div class="role-icon"><svg width="28" height="28" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5 8.3 8l4.7 4.5"/><path d="M4.7 12v6.5h7V12"/><path d="M13.5 14 17.5 10.4 21.5 14"/><path d="M14.7 13.4v5.6H21v-5.6"/></svg></div>
+      <div class="role-label">Barangay</div>
+      <div class="role-desc">Health Worker / BHW Portal</div>
+    </div>
+    <div class="role-card" id="role-rhu" onclick="selectRole('rhu')">
+      <div class="role-icon"><svg width="28" height="28" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="13" rx="1.4"/><path d="M8.5 7V4h7v3"/><path d="M12 11v6M9 14h6"/></svg></div>
+      <div class="role-label">RHU</div>
+      <div class="role-desc">Rural Health Unit Portal</div>
+    </div>
+  </div>
+
+  <!-- Login Card -->
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-header-icon" id="login-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5 8.3 8l4.7 4.5"/><path d="M4.7 12v6.5h7V12"/><path d="M13.5 14 17.5 10.4 21.5 14"/><path d="M14.7 13.4v5.6H21v-5.6"/></svg></div>
+      <div class="login-header-text">
+        <div class="title" id="login-title">Barangay Health Worker Login</div>
+        <div class="sub" id="login-sub">Log in to submit and monitor dengue cases</div>
+      </div>
+    </div>
+
+    <div class="login-body">
+      <div class="error-msg" id="error-msg"><svg width="13" height="13" style="vertical-align:-2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19L12 3.5z"/><path d="M12 9.8v4.4"/><circle cx="12" cy="17" r="0.15" fill="currentColor"/></svg> Invalid credentials. Please try again.</div>
+
+      <!-- Barangay: show barangay selector -->
+      <div id="brgy-select-group" class="form-group">
+        <label class="form-label">Barangay</label>
+        <div class="brgy-select-wrap">
+          <select class="form-input" id="brgy-select">
+            <option value="">Select your barangay...</option>
+            <option>Abangay</option><option>Agcarope</option><option>Aglobong</option>
+            <option>Aguingay</option><option>Anhawan</option>
+            <option>Aquino Nobleza East (Pob.)</option><option>Aquino Nobleza West (Pob.)</option>
+            <option>Atimonan</option><option>Balanac</option><option>Barasalon</option>
+            <option>Bongol</option><option>Cabantog</option><option>Calmay</option>
+            <option>Canawili</option><option>Canawillian</option>
+            <option>Capt. A. Tirador (Pob.)</option><option>Caranas</option>
+            <option>Caraudan</option><option>Carigangan</option>
+            <option>Concepcion Pob. (D.G. Abordo)</option>
+            <option>Crispin Salazar North (Pob.)</option><option>Crispin Salazar South (Pob.)</option>
+            <option>Cunsad</option><option>Dabong</option><option>Damires</option>
+            <option>Damo-ong</option><option>Danao</option>
+            <option>Don T. Lutero Center (Pob.)</option><option>Don T. Lutero East (Pob.)</option>
+            <option>Don T. Lutero West (Pob.)</option><option>Gines</option>
+            <option>Golgota (Pob.)</option><option>Guadalupe</option><option>Jibolo</option>
+            <option>Kuyot</option><option>Locsin (Pob.)</option><option>Madong</option>
+            <option>Manacabac</option><option>Mangil</option><option>Matag-ub</option>
+            <option>Monte-Magapa</option><option>Pangilihan</option><option>Panuran</option>
+            <option>Pararinga</option><option>Patong-patong</option><option>Quipot</option>
+            <option>R. Armada (Pob.)</option><option>S. M. Villa (Pob.)</option>
+            <option>San Julian (Pob.)</option><option>San Pedro (Pob.)</option>
+            <option>Santa Rita (Pob.)</option><option>Santo Tomas</option>
+            <option>Sarawag</option><option>Tambal</option><option>Tamu-an</option>
+            <option>Tiringanan</option><option>Tolarucan</option><option>Tuburan</option>
+            <option>Ubian</option><option>Yabon</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Username / Email</label>
+        <input type="text" class="form-input" id="username" placeholder="Enter your username or email" autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="pw-wrap">
+          <input type="password" class="form-input" id="password" placeholder="Enter your password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" onclick="togglePassword()" id="pw-eye" title="Show/hide password">
+            <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <button class="btn-login brgy" id="login-btn" onclick="doLogin()">
+        <span class="spinner" id="spinner"></span>
+        <span id="btn-text"><svg width="15" height="15" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5 8.3 8l4.7 4.5"/><path d="M4.7 12v6.5h7V12"/><path d="M13.5 14 17.5 10.4 21.5 14"/><path d="M14.7 13.4v5.6H21v-5.6"/></svg> Log In as Barangay Worker</span>
+      </button>
+
+      <div id="forgot-link-wrap" style="margin-top:14px;font-size:12px;color:var(--muted);text-align:center">
+        <button onclick="showForgotPassword()" style="background:none;border:none;color:var(--info);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline">Forgot your password?</button>
+      </div>
+
+      <!-- Register link — barangay only -->
+      <div id="register-link-wrap" style="margin-top:10px;text-align:center;border-top:1px solid var(--border);padding-top:12px">
+        <span style="font-size:12px;color:var(--muted)">New BHW? </span>
+        <button onclick="showRegister()" style="background:none;border:none;color:var(--info);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline">Create an Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REGISTRATION CARD (hidden by default) ── -->
+  <div class="login-card" id="register-card" style="display:none;margin-top:16px">
+    <div class="login-header">
+      <div class="login-header-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4.5 19.5 8.5 9 19H5v-4L15.5 4.5z"/><path d="M13.5 6.5 17.5 10.5"/></svg></div>
+      <div class="login-header-text">
+        <div class="title">Register as Barangay Health Worker</div>
+        <div class="sub">Your account will need RHU approval before you can log in</div>
+      </div>
+    </div>
+    <div class="login-body">
+      <div class="error-msg" id="reg-error"></div>
+      <div id="reg-success" style="display:none;background:rgba(72,187,120,0.12);border:1px solid rgba(72,187,120,0.3);border-radius:7px;padding:12px 14px;font-size:13px;color:var(--safe);margin-bottom:14px">
+        <svg width="14" height="14" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M7.8 12.3 10.5 15 16.3 8.8"/></svg> Registration submitted! The RHU will review and approve your account. You'll be able to log in once approved.
+      </div>
+
+      <div id="reg-form">
+        <div class="form-group">
+          <label class="form-label">Full Name <span style="color:var(--accent)">*</span></label>
+          <input type="text" class="form-input" id="reg-name" placeholder="e.g. Juan dela Cruz">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Barangay <span style="color:var(--accent)">*</span></label>
+          <div class="brgy-select-wrap">
+            <select class="form-input" id="reg-barangay">
+              <option value="">Select your barangay...</option>
+              <option>Abangay</option><option>Agcarope</option><option>Aglobong</option>
+              <option>Aguingay</option><option>Anhawan</option>
+              <option>Aquino Nobleza East (Pob.)</option><option>Aquino Nobleza West (Pob.)</option>
+              <option>Atimonan</option><option>Balanac</option><option>Barasalon</option>
+              <option>Bongol</option><option>Cabantog</option><option>Calmay</option>
+              <option>Canawili</option><option>Canawillian</option>
+              <option>Capt. A. Tirador (Pob.)</option><option>Caranas</option>
+              <option>Caraudan</option><option>Carigangan</option>
+              <option>Concepcion Pob. (D.G. Abordo)</option>
+              <option>Crispin Salazar North (Pob.)</option><option>Crispin Salazar South (Pob.)</option>
+              <option>Cunsad</option><option>Dabong</option><option>Damires</option>
+              <option>Damo-ong</option><option>Danao</option>
+              <option>Don T. Lutero Center (Pob.)</option><option>Don T. Lutero East (Pob.)</option>
+              <option>Don T. Lutero West (Pob.)</option><option>Gines</option>
+              <option>Golgota (Pob.)</option><option>Guadalupe</option><option>Jibolo</option>
+              <option>Kuyot</option><option>Locsin (Pob.)</option><option>Madong</option>
+              <option>Manacabac</option><option>Mangil</option><option>Matag-ub</option>
+              <option>Monte-Magapa</option><option>Pangilihan</option><option>Panuran</option>
+              <option>Pararinga</option><option>Patong-patong</option><option>Quipot</option>
+              <option>R. Armada (Pob.)</option><option>S. M. Villa (Pob.)</option>
+              <option>San Julian (Pob.)</option><option>San Pedro (Pob.)</option>
+              <option>Santa Rita (Pob.)</option><option>Santo Tomas</option>
+              <option>Sarawag</option><option>Tambal</option><option>Tamu-an</option>
+              <option>Tiringanan</option><option>Tolarucan</option><option>Tuburan</option>
+              <option>Ubian</option><option>Yabon</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          <input type="tel" class="form-input" id="reg-phone" placeholder="e.g. 09171234567">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address <span style="color:var(--accent)">*</span></label>
+          <input type="email" class="form-input" id="reg-email" placeholder="e.g. juan@gmail.com">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password <span style="color:var(--accent)">*</span></label>
+          <div class="pw-wrap">
+            <input type="password" class="form-input" id="reg-password" placeholder="Min. 8 characters">
+            <button type="button" class="pw-toggle" onclick="toggleRegPassword()" title="Show/hide">
+              <svg id="reg-eye-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg id="reg-eye-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm Password <span style="color:var(--accent)">*</span></label>
+          <input type="password" class="form-input" id="reg-confirm" placeholder="Re-enter password">
+        </div>
+
+        <button class="btn-login brgy" id="reg-btn" onclick="doRegister()">
+          <span class="spinner" id="reg-spinner"></span>
+          <span id="reg-btn-text"><svg width="15" height="15" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4.5 19.5 8.5 9 19H5v-4L15.5 4.5z"/><path d="M13.5 6.5 17.5 10.5"/></svg> Submit Registration</span>
+        </button>
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="hideRegister()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit">← Back to Login</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FORGOT PASSWORD CARD (hidden by default) ── -->
+  <div class="login-card" id="forgot-card" style="display:none;margin-top:16px">
+    <div class="login-header">
+      <div class="login-header-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="16.5" r="3.6"/><path d="M10.1 13.9 18.5 5.5"/><path d="M15.5 8.5 17.7 10.7M18 6l2.2 2.2"/></svg></div>
+      <div class="login-header-text">
+        <div class="title">Reset Your Password</div>
+        <div class="sub">Enter your registered email to set a new password</div>
+      </div>
+    </div>
+    <div class="login-body">
+      <div class="error-msg" id="fp-error"></div>
+      <div id="fp-success" style="display:none;background:rgba(72,187,120,0.12);border:1px solid rgba(72,187,120,0.3);border-radius:7px;padding:12px 14px;font-size:13px;color:var(--safe);margin-bottom:14px">
+        <svg width="14" height="14" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M7.8 12.3 10.5 15 16.3 8.8"/></svg> Password updated successfully! You can now log in with your new password.
+      </div>
+      <div id="fp-note" style="background:rgba(99,179,237,0.1);border:1px solid rgba(99,179,237,0.25);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--info);margin-bottom:14px">
+        ℹ️ This works for accounts registered through the <strong>Create an Account</strong> form. Seed accounts (set up by the RHU admin) must be updated in <code style="font-size:11px;background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px">config.js</code>.
+      </div>
+
+      <div id="fp-form">
+        <!-- Step 1: find the account -->
+        <div id="fp-step1">
+          <div class="form-group">
+            <label class="form-label">Email Address <span style="color:var(--accent)">*</span></label>
+            <input type="email" class="form-input" id="fp-email" placeholder="e.g. juan@gmail.com" autocomplete="email">
+          </div>
+          <button class="btn-login brgy" id="fp-find-btn" onclick="fpFindAccount()">
+            <span class="spinner" id="fp-find-spinner"></span>
+            <span id="fp-find-text"><svg width="15" height="15" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg> Find My Account</span>
+          </button>
+        </div>
+
+        <!-- Step 2: set new password (shown after account found) -->
+        <div id="fp-step2" style="display:none">
+          <div style="background:rgba(72,187,120,0.1);border:1px solid rgba(72,187,120,0.25);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--safe);margin-bottom:14px">
+            <svg width="14" height="14" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M7.8 12.3 10.5 15 16.3 8.8"/></svg> Account found! Enter your new password below.
+          </div>
+          <div class="form-group">
+            <label class="form-label">New Password <span style="color:var(--accent)">*</span></label>
+            <div class="pw-wrap">
+              <input type="password" class="form-input" id="fp-new-pw" placeholder="Min. 8 characters">
+              <button type="button" class="pw-toggle" onclick="toggleFpPassword('fp-new-pw','fp-eye1-open','fp-eye1-closed')" title="Show/hide">
+                <svg id="fp-eye1-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="fp-eye1-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirm New Password <span style="color:var(--accent)">*</span></label>
+            <div class="pw-wrap">
+              <input type="password" class="form-input" id="fp-confirm-pw" placeholder="Re-enter new password">
+              <button type="button" class="pw-toggle" onclick="toggleFpPassword('fp-confirm-pw','fp-eye2-open','fp-eye2-closed')" title="Show/hide">
+                <svg id="fp-eye2-open" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="fp-eye2-closed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+          <button class="btn-login brgy" id="fp-save-btn" onclick="fpSavePassword()">
+            <span class="spinner" id="fp-save-spinner"></span>
+            <span id="fp-save-text"><svg width="15" height="15" style="vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="1.6"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg> Update Password</span>
+          </button>
+        </div>
+
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="hideForgotPassword()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit">← Back to Login</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="version-tag">Dengue Alert v1.0 · Janiuay, Iloilo · 2025</div>
+</div><!-- /login-wrap -->
+
+<!-- RIGHT TIPS PANEL -->
+<div class="tips-panel">
+  <div class="tips-panel-title"><svg width="14" height="14" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 19 5.5v6c0 5.6-4 8.4-7 9.5-3-1.1-7-3.9-7-9.5v-6L12 2.5z"/></svg> Prevention Tips</div>
+
+  <div class="tip-card safe">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1.4 10a1.8 1.8 0 0 1-1.8 1.5H9.2a1.8 1.8 0 0 1-1.8-1.5L6 8z"/><path d="M4.5 8h15"/><path d="M9 8c0-2.5 1.3-4.2 3-4.2S15 5.5 15 8"/></svg></span>
+      <span class="tip-card-label">Eliminate Breeding Sites</span>
+    </div>
+    <div class="tip-card-body">
+      Aedes mosquitoes breed in <strong style="color:var(--safe)">standing water</strong>. Check every week:
+      <ul>
+        <li>Empty and scrub water containers</li>
+        <li>Cover drums and water tanks</li>
+        <li>Clear clogged gutters</li>
+        <li>Remove old tires and cans</li>
+        <li>Change pet water daily</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="tip-card info">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h11.8a2.3 2.3 0 1 0-2.1-3.3"/><path d="M3 13h15.3a2.4 2.4 0 1 1-2.2 3.4"/><path d="M3 17.5h8.7a2 2 0 1 1-1.8 2.8"/></svg></span>
+      <span class="tip-card-label">Fogging Guidelines</span>
+    </div>
+    <div class="tip-card-body">
+      Fogging works best <strong style="color:var(--info)">with source reduction</strong>. Before fogging:
+      <ul>
+        <li>Cover all food and water</li>
+        <li>Remove pets and children</li>
+        <li>Close windows during fogging</li>
+        <li>Stay away for 30 minutes</li>
+        <li>Fogging alone is not enough!</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="tip-card warn">
+    <div class="tip-card-header">
+      <span class="tip-card-icon"><svg width="18" height="18" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="13" rx="1.4"/><path d="M8.5 7V4h7v3"/><path d="M12 11v6M9 14h6"/></svg></span>
+      <span class="tip-card-label">When to Report</span>
+    </div>
+    <div class="tip-card-body">
+      Report dengue cases <strong style="color:var(--warn)">within 24 hours</strong> to the RHU:
+      <ul>
+        <li>Any confirmed or suspected case</li>
+        <li>Cluster of fever in one area</li>
+        <li>After fogging is completed</li>
+        <li>After a clean-up drive</li>
+        <li>Any outbreak concern</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</div><!-- /login-page -->
+
+<!-- Supabase config -->
+<script src="config.js"></script>
+<script>
+  let currentRole = 'barangay';
+
+  const ICON = {
+    warning: "<svg width=\"13\" height=\"13\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3.5 21.5 20h-19L12 3.5z\"/><path d=\"M12 9.8v4.4\"/><circle cx=\"12\" cy=\"17\" r=\"0.15\" fill=\"currentColor\"/></svg>",
+    success: "<svg width=\"13\" height=\"13\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"8.8\"/><path d=\"M7.8 12.3 10.5 15 16.3 8.8\"/></svg>",
+    error: "<svg width=\"13\" height=\"13\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"8.8\"/><path d=\"M15.2 8.8 8.8 15.2M8.8 8.8l6.4 6.4\"/></svg>",
+    pending: "<svg width=\"13\" height=\"13\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 3h12M6 21h12\"/><path d=\"M7 3c0 4 3 5.5 5 6.5C10 10.5 7 12 7 16v5M17 3c0 4-3 5.5-5 6.5 2 1 5 2.5 5 6.5v5\"/></svg>",
+    village: "<svg width=\"15\" height=\"15\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3.5 12.5 8.3 8l4.7 4.5\"/><path d=\"M4.7 12v6.5h7V12\"/><path d=\"M13.5 14 17.5 10.4 21.5 14\"/><path d=\"M14.7 13.4v5.6H21v-5.6\"/></svg>",
+    hospital: "<svg width=\"15\" height=\"15\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"7\" width=\"16\" height=\"13\" rx=\"1.4\"/><path d=\"M8.5 7V4h7v3\"/><path d=\"M12 11v6M9 14h6\"/></svg>",
+    form: "<svg width=\"15\" height=\"15\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15.5 4.5 19.5 8.5 9 19H5v-4L15.5 4.5z\"/><path d=\"M13.5 6.5 17.5 10.5\"/></svg>",
+    search: "<svg width=\"15\" height=\"15\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"M15.5 15.5 21 21\"/></svg>",
+    lock: "<svg width=\"15\" height=\"15\" style=\"vertical-align:-3px\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"10.5\" width=\"14\" height=\"10\" rx=\"1.6\"/><path d=\"M8 10.5V7.8a4 4 0 0 1 8 0v2.7\"/></svg>"
+  };
+
+
+  // Apply saved theme on load
+  (function() {
+    const saved = localStorage.getItem('dengue_theme');
+    if (saved === 'light') document.body.classList.add('light-mode');
+  })();
+
+  function selectRole(role) {
+    currentRole = role;
+    const brgyCard = document.getElementById('role-brgy');
+    const rhuCard = document.getElementById('role-rhu');
+    const loginIcon = document.getElementById('login-icon');
+    const loginTitle = document.getElementById('login-title');
+    const loginSub = document.getElementById('login-sub');
+    const loginBtn = document.getElementById('login-btn');
+    const btnText = document.getElementById('btn-text');
+    const brgyGroup = document.getElementById('brgy-select-group');
+    const regLinkWrap = document.getElementById('register-link-wrap');
+
+    if (role === 'barangay') {
+      brgyCard.className = 'role-card active-brgy';
+      rhuCard.className = 'role-card';
+      loginIcon.innerHTML = ICON.village + ' ';
+      loginTitle.textContent = 'Barangay Health Worker Login';
+      loginSub.textContent = 'Log in to submit and monitor dengue cases';
+      loginBtn.className = 'btn-login brgy';
+      btnText.innerHTML = ICON.village + ' Log In as Barangay Worker';
+      brgyGroup.style.display = '';
+      regLinkWrap.style.display = '';
+      document.getElementById('forgot-link-wrap').style.display = '';
+      hideRegister();
+    } else {
+      rhuCard.className = 'role-card active-rhu';
+      brgyCard.className = 'role-card';
+      loginIcon.innerHTML = ICON.hospital + ' ';
+      loginTitle.textContent = 'RHU Officer / Admin Login';
+      loginSub.textContent = 'Access the central monitoring and alert dashboard';
+      loginBtn.className = 'btn-login rhu';
+      btnText.innerHTML = ICON.hospital + ' Log In as RHU Officer';
+      brgyGroup.style.display = 'none';
+      regLinkWrap.style.display = 'none';
+      document.getElementById('forgot-link-wrap').style.display = 'none';
+      hideForgotPassword();
+      hideRegister();
+    }
+  }
+
+  // ── SHOW / HIDE REGISTER ─────────────────────────────────
+  function showRegister() {
+    document.getElementById('register-card').style.display = '';
+    document.getElementById('register-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('reg-error').style.display = 'none';
+    document.getElementById('reg-success').style.display = 'none';
+    document.getElementById('reg-form').style.display = '';
+  }
+  function hideRegister() {
+    document.getElementById('register-card').style.display = 'none';
+  }
+  function toggleRegPassword() {
+    const input = document.getElementById('reg-password');
+    const open  = document.getElementById('reg-eye-open');
+    const closed = document.getElementById('reg-eye-closed');
+    if (input.type === 'password') { input.type = 'text'; open.style.display = 'none'; closed.style.display = ''; }
+    else { input.type = 'password'; open.style.display = ''; closed.style.display = 'none'; }
+    input.focus();
+  }
+
+  // ── REGISTER ─────────────────────────────────────────────
+  async function doRegister() {
+    const name     = document.getElementById('reg-name').value.trim();
+    const barangay = document.getElementById('reg-barangay').value;
+    const phone    = document.getElementById('reg-phone').value.trim();
+    const email    = document.getElementById('reg-email').value.trim().toLowerCase();
+    const password = document.getElementById('reg-password').value;
+    const confirm  = document.getElementById('reg-confirm').value;
+    const errorEl  = document.getElementById('reg-error');
+    const spinner  = document.getElementById('reg-spinner');
+    const btn      = document.getElementById('reg-btn');
+
+    errorEl.style.display = 'none';
+
+    if (!name)     { errorEl.innerHTML = ICON.warning + ' Please enter your full name.'; errorEl.style.display = 'block'; return; }
+    if (!barangay) { errorEl.innerHTML = ICON.warning + ' Please select your barangay.'; errorEl.style.display = 'block'; return; }
+    if (!email || !email.includes('@')) { errorEl.innerHTML = ICON.warning + ' Please enter a valid email address.'; errorEl.style.display = 'block'; return; }
+    if (password.length < 8) { errorEl.innerHTML = ICON.warning + ' Password must be at least 8 characters.'; errorEl.style.display = 'block'; return; }
+    if (password !== confirm) { errorEl.innerHTML = ICON.warning + ' Passwords do not match.'; errorEl.style.display = 'block'; return; }
+
+    spinner.style.display = 'block';
+    btn.disabled = true;
+    document.getElementById('reg-btn-text').textContent = 'Submitting...';
+
+    try {
+      if (_isConfigured) {
+        await AUTH.register({ name, barangay, phone, email, password });
+      } else {
+        // localStorage fallback
+        const accounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+        if (accounts.find(a => a.email === email)) {
+          errorEl.innerHTML = ICON.warning + ' An account with this email already exists.';
+          errorEl.style.display = 'block';
+          spinner.style.display = 'none'; btn.disabled = false;
+          document.getElementById('reg-btn-text').innerHTML = ICON.form + ' Submit Registration';
+          return;
+        }
+        accounts.push({ id: 'bhw-' + Date.now(), name, barangay, phone, email, password, status: 'pending', role: 'bhw', registered_at: new Date().toISOString() });
+        localStorage.setItem('bhw_accounts', JSON.stringify(accounts));
+      }
+
+      // Show success, hide form
+      document.getElementById('reg-success').style.display = 'block';
+      document.getElementById('reg-form').style.display = 'none';
+    } catch(e) {
+      errorEl.innerHTML = ICON.warning + ' Registration failed: ' + e.message;
+      errorEl.style.display = 'block';
+    } finally {
+      spinner.style.display = 'none'; btn.disabled = false;
+      document.getElementById('reg-btn-text').innerHTML = ICON.form + ' Submit Registration';
+    }
+  }
+
+  // ── LOGIN ─────────────────────────────────────────────────
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errorEl  = document.getElementById('error-msg');
+    const spinner  = document.getElementById('spinner');
+    const btn      = document.getElementById('login-btn');
+
+    errorEl.style.display = 'none';
+
+    if (!username || !password) {
+      errorEl.innerHTML = ICON.warning + ' Please enter your username and password.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    if (currentRole === 'barangay' && !document.getElementById('brgy-select').value) {
+      errorEl.innerHTML = ICON.warning + ' Please select your barangay.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    spinner.style.display = 'block';
+    btn.disabled = true;
+
+    if (_isConfigured) {
+      try {
+        const selectedBarangay = document.getElementById('brgy-select')?.value || '';
+        const user = await AUTH.login(currentRole, username, password, selectedBarangay);
+        localStorage.setItem('dengue_user', JSON.stringify(user));
+        window.location.href = user.role === 'rhu' || user.role === 'admin' ? 'rhu.html' : 'barangay.html';
+        return;
+      } catch (e) {
+        errorEl.innerHTML = ICON.warning + ' ' + e.message;
+        errorEl.style.display = 'block'; spinner.style.display = 'none'; btn.disabled = false; return;
+      }
+    } else {
+      // localStorage fallback
+      const storageKey = currentRole === 'rhu' ? 'admin_accounts' : 'bhw_accounts';
+      const accounts = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const account = accounts.find(a => a.email === username.toLowerCase() || a.email.split('@')[0] === username);
+      if (account) {
+        if (account.password !== password) {
+          errorEl.innerHTML = ICON.warning + ' Incorrect password.';
+          errorEl.style.display = 'block'; spinner.style.display = 'none'; btn.disabled = false; return;
+        }
+        if (account.status === 'pending') {
+          errorEl.innerHTML = ICON.pending + ' Your account is pending RHU approval. Please wait for confirmation.';
+          errorEl.style.display = 'block'; spinner.style.display = 'none'; btn.disabled = false; return;
+        }
+        if (account.status === 'rejected') {
+          errorEl.innerHTML = ICON.error + ' Your registration was not approved. Please contact the RHU.';
+          errorEl.style.display = 'block'; spinner.style.display = 'none'; btn.disabled = false; return;
+        }
+        const selectedBarangay = document.getElementById('brgy-select')?.value || account.barangay || '';
+        localStorage.setItem('dengue_user', JSON.stringify({ id: account.id, email: account.email, role: account.role, barangay: selectedBarangay, name: account.name }));
+        window.location.href = account.role === 'rhu' || account.role === 'admin' ? 'rhu.html' : 'barangay.html';
+        return;
+      }
+    }
+
+    errorEl.innerHTML = ICON.warning + ' Invalid login credentials.';
+    errorEl.style.display = 'block';
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  }
+
+  // Show/hide password toggle
+  function togglePassword() {
+    const input     = document.getElementById('password');
+    const eyeOpen   = document.getElementById('eye-open');
+    const eyeClosed = document.getElementById('eye-closed');
+    if (input.type === 'password') {
+      input.type = 'text';
+      eyeOpen.style.display   = 'none';
+      eyeClosed.style.display = '';
+    } else {
+      input.type = 'password';
+      eyeOpen.style.display   = '';
+      eyeClosed.style.display = 'none';
+    }
+    input.focus();
+  }
+
+  // Allow Enter key to submit
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  // ── FORGOT PASSWORD ──────────────────────────────────────────
+  let _fpAccountId = null; // Firestore doc ID of found account
+
+  function showForgotPassword() {
+    // Reset state
+    _fpAccountId = null;
+    document.getElementById('fp-error').style.display = 'none';
+    document.getElementById('fp-success').style.display = 'none';
+    document.getElementById('fp-form').style.display = '';
+    document.getElementById('fp-step1').style.display = '';
+    document.getElementById('fp-step2').style.display = 'none';
+    document.getElementById('fp-email').value = '';
+    document.getElementById('fp-new-pw').value = '';
+    document.getElementById('fp-confirm-pw').value = '';
+    hideRegister();
+    const card = document.getElementById('forgot-card');
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function hideForgotPassword() {
+    document.getElementById('forgot-card').style.display = 'none';
+  }
+
+  function toggleFpPassword(inputId, openId, closedId) {
+    const input  = document.getElementById(inputId);
+    const open   = document.getElementById(openId);
+    const closed = document.getElementById(closedId);
+    if (input.type === 'password') { input.type = 'text';     open.style.display = 'none'; closed.style.display = ''; }
+    else                           { input.type = 'password'; open.style.display = '';     closed.style.display = 'none'; }
+    input.focus();
+  }
+
+  async function fpFindAccount() {
+    const email   = document.getElementById('fp-email').value.trim().toLowerCase();
+    const errorEl = document.getElementById('fp-error');
+    const spinner = document.getElementById('fp-find-spinner');
+    const btn     = document.getElementById('fp-find-btn');
+
+    errorEl.style.display = 'none';
+    if (!email || !email.includes('@')) {
+      errorEl.innerHTML = ICON.warning + ' Please enter a valid email address.';
+      errorEl.style.display = 'block'; return;
+    }
+
+    spinner.style.display = 'block';
+    btn.disabled = true;
+    document.getElementById('fp-find-text').textContent = 'Searching...';
+
+    try {
+      let found = false;
+
+      if (_isConfigured) {
+        try {
+          const result = await AUTH.findAccountForReset(email);
+          _fpAccountId = result.accountId;
+          found = true;
+        } catch (e) { found = false; }
+      } else {
+        // localStorage fallback
+        const accounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+        const acc = accounts.find(a => a.email === email);
+        if (acc) { _fpAccountId = acc.id; found = true; }
+      }
+
+      if (!found) {
+        errorEl.innerHTML = ICON.warning + ' No registered account found with that email address. If you are a seed account, please contact the RHU admin.';
+        errorEl.style.display = 'block'; return;
+      }
+
+      // Show step 2
+      document.getElementById('fp-step1').style.display = 'none';
+      document.getElementById('fp-step2').style.display = '';
+      document.getElementById('fp-new-pw').focus();
+    } catch(e) {
+      errorEl.innerHTML = ICON.warning + ' Error looking up account: ' + e.message;
+      errorEl.style.display = 'block';
+    } finally {
+      spinner.style.display = 'none';
+      btn.disabled = false;
+      document.getElementById('fp-find-text').innerHTML = ICON.search + ' Find My Account';
+    }
+  }
+
+  async function fpSavePassword() {
+    const newPw   = document.getElementById('fp-new-pw').value;
+    const confirm = document.getElementById('fp-confirm-pw').value;
+    const errorEl = document.getElementById('fp-error');
+    const spinner = document.getElementById('fp-save-spinner');
+    const btn     = document.getElementById('fp-save-btn');
+
+    errorEl.style.display = 'none';
+    if (newPw.length < 8) {
+      errorEl.innerHTML = ICON.warning + ' Password must be at least 8 characters.';
+      errorEl.style.display = 'block'; return;
+    }
+    if (newPw !== confirm) {
+      errorEl.innerHTML = ICON.warning + ' Passwords do not match.';
+      errorEl.style.display = 'block'; return;
+    }
+
+    spinner.style.display = 'block';
+    btn.disabled = true;
+    document.getElementById('fp-save-text').textContent = 'Saving...';
+
+    try {
+      if (_isConfigured) {
+        await AUTH.resetPassword(_fpAccountId, newPw);
+      } else {
+        // localStorage fallback
+        const accounts = JSON.parse(localStorage.getItem('bhw_accounts') || '[]');
+        const idx = accounts.findIndex(a => a.id === _fpAccountId);
+        if (idx !== -1) {
+          accounts[idx].password = newPw;
+          accounts[idx].password_updated_at = new Date().toISOString();
+          localStorage.setItem('bhw_accounts', JSON.stringify(accounts));
+        }
+      }
+
+      // Show success, hide form
+      document.getElementById('fp-success').style.display = 'block';
+      document.getElementById('fp-form').style.display = 'none';
+      _fpAccountId = null;
+    } catch(e) {
+      errorEl.innerHTML = ICON.warning + ' Failed to update password: ' + e.message;
+      errorEl.style.display = 'block';
+    } finally {
+      spinner.style.display = 'none';
+      btn.disabled = false;
+      document.getElementById('fp-save-text').innerHTML = ICON.lock + ' Update Password';
+    }
+  }
+</script>
+</body>
+</html>
