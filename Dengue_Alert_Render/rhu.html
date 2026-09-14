@@ -79,6 +79,11 @@
   .stat-card.warn .stat-value{color:var(--warn)}
   .stat-card.safe .stat-value{color:var(--safe)}
   .stat-card.info .stat-value{color:var(--info)}
+  .stat-card-clickable{cursor:pointer}
+  .stat-card-clickable.active{border-color:var(--info);box-shadow:0 0 0 1px var(--info)}
+  .stat-chev{font-size:9px;color:var(--muted);margin-left:4px;transition:transform .2s;display:inline-block}
+  .stat-chev.open{transform:rotate(90deg)}
+  .stat-detail-panel{animation:fadeIn .15s ease}
 
   /* Alert banner */
   .alert-banner{background:linear-gradient(135deg,rgba(245,101,101,0.18),rgba(237,137,54,0.1));border:1px solid rgba(245,101,101,0.4);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:20px;animation:pulse-border 2s ease infinite}
@@ -356,10 +361,21 @@
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card critical"><div class="stat-label">Active Cases</div><div class="stat-value" id="stat-cases">—</div><div class="stat-change">Confirmed &amp; not yet resolved</div></div>
-      <div class="stat-card warn"><div class="stat-label">High-Risk Barangays</div><div class="stat-value" id="stat-highrisk">—</div><div class="stat-change">Out of 20 monitored</div></div>
-      <div class="stat-card info"><div class="stat-label">SMS Dispatched</div><div class="stat-value" id="stat-emails">—</div><div class="stat-change">This month</div></div>
-      <div class="stat-card safe"><div class="stat-label">Pending Review</div><div class="stat-value" id="stat-pending">—</div><div class="stat-change">Awaiting RHU action</div></div>
+      <div class="stat-card critical stat-card-clickable" id="stat-card-active" onclick="toggleStatDetail('active')"><div class="stat-label">Active Cases <span class="stat-chev" id="stat-chev-active">▶</span></div><div class="stat-value" id="stat-cases">—</div><div class="stat-change">Confirmed &amp; not yet resolved</div></div>
+      <div class="stat-card warn stat-card-clickable" id="stat-card-highrisk" onclick="toggleStatDetail('highrisk')"><div class="stat-label">High-Risk Barangays <span class="stat-chev" id="stat-chev-highrisk">▶</span></div><div class="stat-value" id="stat-highrisk">—</div><div class="stat-change">Out of 20 monitored</div></div>
+      <div class="stat-card info stat-card-clickable" id="stat-card-sms" onclick="toggleStatDetail('sms')"><div class="stat-label">SMS Dispatched <span class="stat-chev" id="stat-chev-sms">▶</span></div><div class="stat-value" id="stat-emails">—</div><div class="stat-change">This month</div></div>
+      <div class="stat-card safe stat-card-clickable" id="stat-card-pending" onclick="toggleStatDetail('pending')"><div class="stat-label">Pending Review <span class="stat-chev" id="stat-chev-pending">▶</span></div><div class="stat-value" id="stat-pending">—</div><div class="stat-change">Awaiting RHU action</div></div>
+      <div class="stat-card info stat-card-clickable" id="stat-card-year" onclick="toggleStatDetail('year')"><div class="stat-label">This Year (YTD) <span class="stat-chev" id="stat-chev-year">▶</span></div><div class="stat-value" id="stat-year-total">—</div><div class="stat-change" id="stat-year-change">—</div></div>
+      <div class="stat-card warn stat-card-clickable" id="stat-card-month" onclick="toggleStatDetail('month')"><div class="stat-label">This Month <span class="stat-chev" id="stat-chev-month">▶</span></div><div class="stat-value" id="stat-month-total">—</div><div class="stat-change" id="stat-month-change">—</div></div>
+    </div>
+
+    <!-- Expandable breakdown panel for the stat squares above -->
+    <div class="card stat-detail-panel" id="stat-detail-panel" style="display:none;margin-bottom:20px">
+      <div class="card-header">
+        <div><div class="card-title" id="stat-detail-title">Details</div><div class="card-sub" id="stat-detail-sub"></div></div>
+        <span class="chip low" style="cursor:pointer" onclick="closeStatDetail()">✕ Close</span>
+      </div>
+      <div id="stat-detail-body" style="max-height:420px;overflow-y:auto"></div>
     </div>
 
     <div class="two-col">
@@ -964,6 +980,12 @@ async function loadDashboard() {
   document.getElementById('stat-emails').textContent   = emailLogs.reduce((a,e) => a + (e.recipient_count||1), 0);
   document.getElementById('stat-pending').textContent  = pending.length;
 
+  // Municipal-wide "This Year" / "This Month" squares (same pattern as the
+  // Barangay Portal dashboard, but aggregated across all barangays)
+  const byYear = groupCasesByYearMonth(allCases);
+  updateYearStatCard(byYear);
+  updateMonthStatCard(byYear);
+
   // Unread notification badges — show/hide based on count
   updateUnreadBadges(pending.length, highRisk.length);
 
@@ -981,14 +1003,16 @@ async function loadDashboard() {
     document.getElementById('banner-desc').textContent  = 'Continue routine monitoring and prevention activities across all barangays.';
   }
 
-  // Barangay table
+  // Barangay table — click a row to drop down that barangay's submitted cases
   const top = [...riskData].sort((a,b) => b.cases - a.cases).slice(0, 10);
   const tbody = document.getElementById('brgy-tbody');
   tbody.innerHTML = top.map(r => {
     const pct = Math.min(100, Math.round((r.cases / SYSTEM_CONFIG.outbreakThreshold) * 100));
     const cls = r.risk === 'High' ? 'high' : r.risk === 'Medium' ? 'medium' : 'low';
-    return `<tr>
-      <td><strong>${r.barangay}</strong></td>
+    const safeId = r.barangay.replace(/[^a-zA-Z0-9]/g,'_');
+    const brgyCases = allCases.filter(c => c.barangay === r.barangay);
+    return `<tr class="brgy-main-row" style="cursor:pointer" onclick="toggleDashBrgyRow('${safeId}')">
+      <td><span class="brgy-chevron" id="dash-chev-${safeId}" style="margin-right:6px;display:inline-block">▶</span><strong>${r.barangay}</strong></td>
       <td>${r.cases}</td>
       <td>
         <div class="prog-wrap">
@@ -998,7 +1022,12 @@ async function loadDashboard() {
       </td>
       <td><span class="chip ${cls}">${r.risk}</span></td>
       <td>
-        ${r.risk==='High' ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="quickAlert('${r.barangay}')">⚠ Alert</button>` : '—'}
+        ${r.risk==='High' ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();quickAlert('${r.barangay}')">⚠ Alert</button>` : '—'}
+      </td>
+    </tr>
+    <tr id="dash-brgy-row-${safeId}" style="display:none">
+      <td colspan="5" style="padding:0;background:var(--surface2)">
+        <div style="padding:4px 12px">${renderCaseItemsHTML(brgyCases, 'dashbrgy_' + safeId)}</div>
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
@@ -1030,6 +1059,156 @@ async function loadDashboard() {
 
   // Charts
   renderCharts();
+
+  // Keep an already-open stat breakdown panel in sync with fresh data
+  if (openStatKey) renderStatDetail(openStatKey);
+}
+
+// ── MONTHLY / YEARLY STAT SQUARES (municipal-wide) ─────────────
+// Same logic as the Barangay Portal dashboard's "This Year (YTD)" / "This
+// Month" squares, but computed across allCases (every barangay), so the RHU
+// gets the same at-a-glance seasonal comparison BHWs already have.
+const TREND_MONTHS_RHU = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function groupCasesByYearMonth(cases) {
+  const byYear = {};
+  cases.forEach(c => {
+    if (!c.onset_date) return;
+    const parts = String(c.onset_date).split('-');
+    if (parts.length < 2) return;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    if (isNaN(year) || isNaN(month) || month < 0 || month > 11) return;
+    if (!byYear[year]) byYear[year] = { total: Array(12).fill(0), confirmed: Array(12).fill(0), totalCount: 0, confirmedCount: 0 };
+    byYear[year].total[month]++;
+    byYear[year].totalCount++;
+    if (c.status === 'Confirmed') { byYear[year].confirmed[month]++; byYear[year].confirmedCount++; }
+  });
+  return byYear;
+}
+
+function updateYearStatCard(byYear) {
+  const valueEl = document.getElementById('stat-year-total');
+  const changeEl = document.getElementById('stat-year-change');
+  if (!valueEl || !changeEl) return;
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const curMonthIdx = now.getMonth();
+  const thisYear = byYear[nowYear];
+  const lastYear = byYear[nowYear - 1];
+  const ytdThis = thisYear ? thisYear.total.slice(0, curMonthIdx + 1).reduce((a, b) => a + b, 0) : 0;
+  valueEl.textContent = ytdThis;
+  if (lastYear) {
+    const ytdLast = lastYear.total.slice(0, curMonthIdx + 1).reduce((a, b) => a + b, 0);
+    const diff = ytdThis - ytdLast;
+    const pct = ytdLast > 0 ? Math.round((diff / ytdLast) * 100) : null;
+    if (diff > 0) changeEl.innerHTML = `<span style="color:var(--accent)">▲ +${diff}${pct !== null ? ` (+${pct}%)` : ''} vs ${nowYear - 1}</span>`;
+    else if (diff < 0) changeEl.innerHTML = `<span style="color:var(--safe)">▼ ${diff}${pct !== null ? ` (${pct}%)` : ''} vs ${nowYear - 1}</span>`;
+    else changeEl.innerHTML = `<span style="color:var(--muted)">— same as ${nowYear - 1} (Jan–${TREND_MONTHS_RHU[curMonthIdx]})</span>`;
+  } else {
+    changeEl.innerHTML = `<span style="color:var(--muted)">No ${nowYear - 1} data yet</span>`;
+  }
+}
+
+function updateMonthStatCard(byYear) {
+  const valueEl = document.getElementById('stat-month-total');
+  const changeEl = document.getElementById('stat-month-change');
+  if (!valueEl || !changeEl) return;
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const curMonthIdx = now.getMonth();
+  const monthName = TREND_MONTHS_RHU[curMonthIdx];
+  const thisYear = byYear[nowYear];
+  const lastYear = byYear[nowYear - 1];
+  const thisMonthCount = thisYear ? thisYear.total[curMonthIdx] : 0;
+  valueEl.textContent = thisMonthCount;
+  if (lastYear) {
+    const lastYearSameMonth = lastYear.total[curMonthIdx];
+    const diff = thisMonthCount - lastYearSameMonth;
+    const pct = lastYearSameMonth > 0 ? Math.round((diff / lastYearSameMonth) * 100) : null;
+    if (diff > 0) changeEl.innerHTML = `<span style="color:var(--accent)">▲ +${diff}${pct !== null ? ` (+${pct}%)` : ''} vs ${monthName} ${nowYear - 1}</span>`;
+    else if (diff < 0) changeEl.innerHTML = `<span style="color:var(--safe)">▼ ${diff}${pct !== null ? ` (${pct}%)` : ''} vs ${monthName} ${nowYear - 1}</span>`;
+    else changeEl.innerHTML = `<span style="color:var(--muted)">— same as ${monthName} ${nowYear - 1}</span>`;
+  } else {
+    changeEl.innerHTML = `<span style="color:var(--muted)">No ${monthName} ${nowYear - 1} data yet</span>`;
+  }
+}
+
+// ── STAT SQUARE DROP-DOWN (tap a square to see what's behind the number) ──
+let openStatKey = null;
+
+function toggleStatDetail(key) {
+  if (openStatKey === key) { closeStatDetail(); return; }
+  openStatKey = key;
+  document.querySelectorAll('.stat-card-clickable').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.stat-chev').forEach(el => el.classList.remove('open'));
+  document.getElementById('stat-card-' + key)?.classList.add('active');
+  document.getElementById('stat-chev-' + key)?.classList.add('open');
+  document.getElementById('stat-detail-panel').style.display = '';
+  renderStatDetail(key);
+}
+
+function closeStatDetail() {
+  openStatKey = null;
+  document.querySelectorAll('.stat-card-clickable').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.stat-chev').forEach(el => el.classList.remove('open'));
+  document.getElementById('stat-detail-panel').style.display = 'none';
+}
+
+function renderStatDetail(key) {
+  const titleEl = document.getElementById('stat-detail-title');
+  const subEl   = document.getElementById('stat-detail-sub');
+  const bodyEl  = document.getElementById('stat-detail-body');
+  const now = new Date(); const nowYear = now.getFullYear(); const nowMonth = now.getMonth();
+
+  if (key === 'active') {
+    const list = allCases.filter(c => c.status === 'Confirmed' && c.is_active !== false);
+    titleEl.textContent = 'Active Cases'; subEl.textContent = `${list.length} confirmed, not yet resolved`;
+    bodyEl.innerHTML = renderCaseItemsHTML(list, 'sqactive');
+  } else if (key === 'pending') {
+    const list = allCases.filter(c => c.status === 'Pending');
+    titleEl.textContent = 'Pending Review'; subEl.textContent = `${list.length} awaiting RHU action`;
+    bodyEl.innerHTML = renderCaseItemsHTML(list, 'sqpending');
+  } else if (key === 'year') {
+    const list = allCases.filter(c => c.onset_date && parseInt(String(c.onset_date).split('-')[0],10) === nowYear);
+    titleEl.textContent = `This Year (YTD ${nowYear})`; subEl.textContent = `${list.length} case${list.length!==1?'s':''} with onset in ${nowYear}`;
+    bodyEl.innerHTML = renderCaseItemsHTML(list, 'sqyear');
+  } else if (key === 'month') {
+    const list = allCases.filter(c => {
+      if (!c.onset_date) return false;
+      const p = String(c.onset_date).split('-');
+      return parseInt(p[0],10) === nowYear && (parseInt(p[1],10)-1) === nowMonth;
+    });
+    titleEl.textContent = `This Month (${TREND_MONTHS_RHU[nowMonth]} ${nowYear})`; subEl.textContent = `${list.length} case${list.length!==1?'s':''} with onset this month`;
+    bodyEl.innerHTML = renderCaseItemsHTML(list, 'sqmonth');
+  } else if (key === 'highrisk') {
+    const list = riskData.filter(r => r.risk === 'High').sort((a,b)=>b.cases-a.cases);
+    titleEl.textContent = 'High-Risk Barangays'; subEl.textContent = `${list.length} barangay${list.length!==1?'s':''} at or above the outbreak threshold`;
+    bodyEl.innerHTML = list.length ? list.map(r => `
+      <div class="case-row" onclick="showBrgyDetail('${r.barangay}')">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="brgy-dot high"></span>
+          <span style="font-size:13px;font-weight:500;color:var(--text)">${r.barangay}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--accent)">${r.cases} active case${r.cases!==1?'s':''}</span>
+          <span class="chip high" style="margin-left:6px">High</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px">Tap to view this barangay's cases on the Risk Map →</div>
+      </div>`).join('') : `<div style="padding:12px 16px;font-size:12px;color:var(--muted)">No barangay currently exceeds the outbreak threshold.</div>`;
+  } else if (key === 'sms') {
+    const list = [...emailLogs].sort((a,b) => new Date(b.sent_at||0) - new Date(a.sent_at||0));
+    titleEl.textContent = 'SMS Dispatched'; subEl.textContent = `${list.length} message${list.length!==1?'s':''} logged`;
+    bodyEl.innerHTML = list.length ? list.map(e => `
+      <div class="case-row" style="cursor:default">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:500;color:var(--text)">${e.type || 'Notification'}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--muted)">${e.barangay || 'All'}</span>
+          <span class="chip info-chip">${(e.recipient_count||0).toLocaleString()} sent</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">
+          ${formatDate(e.sent_at)}
+        </div>
+      </div>`).join('') : `<div style="padding:12px 16px;font-size:12px;color:var(--muted)">No SMS logged yet.</div>`;
+  }
 }
 
 // ── CHARTS ───────────────────────────────────────────────────
@@ -1099,26 +1278,69 @@ async function loadPending() {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">✅ No pending cases — all cases have been reviewed.</td></tr>';
     return;
   }
-  tbody.innerHTML = pending.map(c => `
-    <tr>
-      <td><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted)">${c.patient_address||'—'}</span></td>
+  tbody.innerHTML = pending.map(c => {
+    const safeId = 'pend_' + c.id.replace(/[^a-zA-Z0-9]/g,'_');
+    const suggested = suggestCaseTypeFromSymptoms(c.symptoms);
+    return `
+    <tr class="brgy-main-row" style="cursor:pointer" onclick="togglePendingRow('${safeId}')">
+      <td><span class="brgy-chevron" id="pend-chev-${safeId}" style="margin-right:6px;display:inline-block">▶</span><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted);padding-left:16px">${c.patient_address||'—'}</span></td>
       <td>${c.patient_age||'—'} / ${c.patient_sex||'—'}</td>
       <td>${c.barangay}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
-      <td><span style="font-size:11px;color:var(--muted);font-style:italic">⏳ TBD by RHU${suggestCaseTypeFromSymptoms(c.symptoms) ? ` <span style="color:${caseTypeColor(suggestCaseTypeFromSymptoms(c.symptoms))}">(suggests ${caseTypeShort(suggestCaseTypeFromSymptoms(c.symptoms))})</span>` : ''}</span></td>
+      <td><span style="font-size:11px;color:var(--muted);font-style:italic">⏳ TBD by RHU${suggested ? ` <span style="color:${caseTypeColor(suggested)}">(suggests ${caseTypeShort(suggested)})</span>` : ''}</span></td>
       <td style="font-size:12px;color:var(--muted);max-width:160px">${(c.symptoms||[]).join(', ')}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${formatDate(c.report_date)}</td>
       <td style="font-size:11px">
         <div>${c.submitted_by_name || '—'}</div>
-        ${c.submitted_by_phone ? `<a href="tel:${c.submitted_by_phone}" style="color:var(--info);text-decoration:none;font-size:10.5px">📞 ${c.submitted_by_phone}</a>` : ''}
+        ${c.submitted_by_phone ? `<a href="tel:${c.submitted_by_phone}" style="color:var(--info);text-decoration:none;font-size:10.5px" onclick="event.stopPropagation()">📞 ${c.submitted_by_phone}</a>` : ''}
       </td>
       <td>
-        <div style="display:flex;gap:4px">
+        <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
           <button class="btn btn-safe" style="padding:4px 10px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','confirm')">✓ Confirm</button>
           <button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','reject')">✕ Reject</button>
         </div>
       </td>
-    </tr>`).join('');
+    </tr>
+    <tr id="pend-row-${safeId}" style="display:none">
+      <td colspan="9" style="padding:0;background:var(--surface2)">
+        <div style="padding:14px 20px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Full Case Details</div>
+          <div class="detail-grid">
+            <div class="detail-field"><div class="detail-label">Full Name</div><div class="detail-val">${c.patient_name || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Age</div><div class="detail-val">${c.patient_age || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Sex</div><div class="detail-val">${c.patient_sex || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Address</div><div class="detail-val">${c.patient_address || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Mobile Number</div><div class="detail-val">${c.patient_contact ? `<a href="tel:${c.patient_contact}" style="color:var(--info);text-decoration:none">📞 ${c.patient_contact}</a>` : '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Barangay</div><div class="detail-val">${c.barangay}</div></div>
+            <div class="detail-field"><div class="detail-label">Onset Date</div><div class="detail-val">${c.onset_date || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Reported</div><div class="detail-val">${formatDate(c.report_date)}</div></div>
+            <div class="detail-field" style="grid-column:1/-1"><div class="detail-label">Symptoms</div><div class="detail-val">${Array.isArray(c.symptoms)?c.symptoms.join(', '):(c.symptoms||'—')}</div></div>
+            <div class="detail-field"><div class="detail-label">Suggested Case Type</div><div class="detail-val" style="color:${suggested?caseTypeColor(suggested):'var(--muted)'}">${suggested ? caseTypeLabel(suggested) : 'Not enough symptom data'}</div></div>
+            <div class="detail-field"><div class="detail-label">Status</div><div class="detail-val" style="color:var(--yellow)">⏳ Pending RHU review</div></div>
+            <div class="detail-field"><div class="detail-label">Submitted by</div><div class="detail-val">${c.submitted_by_name || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">BHW Contact</div><div class="detail-val">${c.submitted_by_phone ? `<a href="tel:${c.submitted_by_phone}" style="color:var(--info);text-decoration:none">📞 ${c.submitted_by_phone}</a>` : '—'}</div></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:6px">
+            <button class="btn btn-safe" style="padding:5px 12px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','confirm')">✓ Confirm</button>
+            <button class="btn btn-danger" style="padding:5px 12px;font-size:11px" onclick="reviewCase('${c.id}','${c.patient_name}','reject')">✕ Reject</button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function togglePendingRow(safeId) {
+  const row = document.getElementById('pend-row-' + safeId);
+  const chev = document.getElementById('pend-chev-' + safeId);
+  if (!row) return;
+  const isOpen = row.style.display !== 'none';
+  document.querySelectorAll('[id^="pend-row-"]').forEach(r => r.style.display = 'none');
+  document.querySelectorAll('[id^="pend-chev-"]').forEach(c => c.classList.remove('open'));
+  if (!isOpen) {
+    row.style.display = '';
+    if (chev) chev.classList.add('open');
+  }
 }
 
 async function reviewCase(id, name, action) {
@@ -1452,6 +1674,67 @@ function scrollToBrgy(brgy) {
   }
 }
 
+// Renders a list of expandable case rows (tap a row to drop down full patient
+// detail). `groupId` must be unique per rendering context so case-detail ids
+// never collide across the dashboard squares, risk monitor table, risk map
+// list, etc.
+function renderCaseItemsHTML(cases, groupId) {
+  if (!cases.length) {
+    return `<div style="padding:12px 16px;font-size:12px;color:var(--muted)">No cases found.</div>`;
+  }
+  return cases.map((c, i) => {
+    const sevColor = caseTypeColor(c.severity);
+    const statusColor = c.status==='Confirmed'?'#48bb78':c.status==='Pending'?'#ecc94b':'#718096';
+    const caseId = `${groupId}_case_${i}`;
+    return `
+    <div class="case-row" onclick="toggleCaseDetail('${caseId}')">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${sevColor};flex-shrink:0;display:inline-block"></span>
+        <span style="font-size:13px;font-weight:500;color:var(--text)">${c.patient_name || 'Unknown'}</span>
+        <span style="font-size:11px;color:var(--muted)">· ${c.barangay || ''}</span>
+        <span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:${statusColor}22;color:${statusColor}">${c.status}</span>
+        ${c.status==='Confirmed' ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${c.is_active===false?'#71809622':'#f5656522'};color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'⚪ Inactive':'🔴 Active'}</span>` : ''}
+        <span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${sevColor}22;color:${sevColor}">${caseTypeShort(c.severity) || 'TBD'} · Suspected</span>
+        <span class="brgy-chevron" style="margin-left:2px" id="chev-${caseId}">▶</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px">
+        Onset: ${c.onset_date || '—'} · Reported: ${c.report_date ? new Date(c.report_date).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—'}
+      </div>
+      <div class="case-detail" id="${caseId}">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Patient Information</div>
+        <div class="detail-grid">
+          <div class="detail-field"><div class="detail-label">Full Name</div><div class="detail-val">${c.patient_name || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Age</div><div class="detail-val">${c.patient_age || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Sex</div><div class="detail-val">${c.patient_sex || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Address</div><div class="detail-val">${c.patient_address || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Mobile Number</div><div class="detail-val">${c.patient_contact || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Barangay</div><div class="detail-val">${c.barangay}</div></div>
+          <div class="detail-field"><div class="detail-label">Onset Date</div><div class="detail-val">${c.onset_date || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Case Type</div><div class="detail-val" style="color:${sevColor}">${caseTypeLabel(c.severity) || 'TBD'}</div></div>
+          <div class="detail-field"><div class="detail-label">Classification</div><div class="detail-val">🔎 Suspected (no NS1/PCR lab confirmation)</div></div>
+          <div class="detail-field" style="grid-column:1/-1"><div class="detail-label">Symptoms</div><div class="detail-val">${Array.isArray(c.symptoms)?c.symptoms.join(', '):(c.symptoms||'—')}</div></div>
+          <div class="detail-field"><div class="detail-label">Status</div><div class="detail-val" style="color:${statusColor}">${c.status}</div></div>
+          ${c.status==='Confirmed' ? `<div class="detail-field"><div class="detail-label">Active Status</div><div class="detail-val" style="color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'Inactive / Resolved':'Active'}</div></div>` : ''}
+          <div class="detail-field"><div class="detail-label">Submitted by</div><div class="detail-val">${c.submitted_by_name || '—'}</div></div>
+          <div class="detail-field"><div class="detail-label">BHW Contact</div><div class="detail-val">${c.submitted_by_phone ? `<a href="tel:${c.submitted_by_phone}" style="color:var(--info);text-decoration:none">📞 ${c.submitted_by_phone}</a>` : '—'}</div></div>
+          ${c.rhu_notes ? `<div class="detail-field" style="grid-column:1/-1"><div class="detail-label">RHU Notes</div><div class="detail-val">${c.rhu_notes}</div></div>` : ''}
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px">
+          <button class="btn btn-primary" style="font-size:11px;padding:5px 10px"
+            onclick="event.stopPropagation();showPage('pending');setTimeout(()=>document.getElementById('pending-search')?.focus(),300)">
+            ✏️ Review Case
+          </button>
+          ${c.status==='Confirmed' ? `
+          <button class="btn ${c.is_active===false?'btn-ghost':'btn-danger'}" style="font-size:11px;padding:5px 10px"
+            onclick="event.stopPropagation();toggleCaseActive('${c.id}', ${c.is_active===false})">
+            ${c.is_active===false?'⚪ Reactivate Case':'🔴 Mark Resolved / Inactive'}
+          </button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderBrgyCaseList() {
   // Always show all barangays — merge BRGY_COORDS keys with riskData
   const riskLookup = {};
@@ -1473,56 +1756,7 @@ function renderBrgyCaseList() {
     const cases = allCases.filter(c => c.barangay === r.barangay);
     const safeId = r.barangay.replace(/[^a-zA-Z0-9]/g,'_');
 
-    const casesHtml = cases.length === 0
-      ? `<div style="padding:12px 16px;font-size:12px;color:var(--muted)">No cases submitted yet.</div>`
-      : cases.map((c, i) => {
-          const sevColor = caseTypeColor(c.severity);
-          const statusColor = c.status==='Confirmed'?'#48bb78':c.status==='Pending'?'#ecc94b':'#718096';
-          return `
-          <div class="case-row" onclick="toggleCaseDetail('${safeId}_case_${i}')">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="width:8px;height:8px;border-radius:50%;background:${sevColor};flex-shrink:0;display:inline-block"></span>
-              <span style="font-size:13px;font-weight:500;color:var(--text)">${c.patient_name || 'Unknown'}</span>
-              <span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:${statusColor}22;color:${statusColor}">${c.status}</span>
-              ${c.status==='Confirmed' ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${c.is_active===false?'#71809622':'#f5656522'};color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'⚪ Inactive':'🔴 Active'}</span>` : ''}
-              <span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${sevColor}22;color:${sevColor}">${caseTypeShort(c.severity) || 'TBD'} · Suspected</span>
-            </div>
-            <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px">
-              Onset: ${c.onset_date || '—'} · Reported: ${c.report_date ? new Date(c.report_date).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—'}
-            </div>
-            <div class="case-detail" id="${safeId}_case_${i}">
-              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Patient Information</div>
-              <div class="detail-grid">
-                <div class="detail-field"><div class="detail-label">Full Name</div><div class="detail-val">${c.patient_name || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Age</div><div class="detail-val">${c.patient_age || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Sex</div><div class="detail-val">${c.patient_sex || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Address</div><div class="detail-val">${c.patient_address || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Mobile Number</div><div class="detail-val">${c.patient_contact || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Barangay</div><div class="detail-val">${c.barangay}</div></div>
-                <div class="detail-field"><div class="detail-label">Onset Date</div><div class="detail-val">${c.onset_date || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">Case Type</div><div class="detail-val" style="color:${sevColor}">${caseTypeLabel(c.severity) || 'TBD'}</div></div>
-                <div class="detail-field"><div class="detail-label">Classification</div><div class="detail-val">🔎 Suspected (no NS1/PCR lab confirmation)</div></div>
-                <div class="detail-field" style="grid-column:1/-1"><div class="detail-label">Symptoms</div><div class="detail-val">${Array.isArray(c.symptoms)?c.symptoms.join(', '):(c.symptoms||'—')}</div></div>
-                <div class="detail-field"><div class="detail-label">Status</div><div class="detail-val" style="color:${statusColor}">${c.status}</div></div>
-                ${c.status==='Confirmed' ? `<div class="detail-field"><div class="detail-label">Active Status</div><div class="detail-val" style="color:${c.is_active===false?'#718096':'#f56565'}">${c.is_active===false?'Inactive / Resolved':'Active'}</div></div>` : ''}
-                <div class="detail-field"><div class="detail-label">Submitted by</div><div class="detail-val">${c.submitted_by_name || '—'}</div></div>
-                <div class="detail-field"><div class="detail-label">BHW Contact</div><div class="detail-val">${c.submitted_by_phone ? `<a href="tel:${c.submitted_by_phone}" style="color:var(--info);text-decoration:none">📞 ${c.submitted_by_phone}</a>` : '—'}</div></div>
-                ${c.rhu_notes ? `<div class="detail-field" style="grid-column:1/-1"><div class="detail-label">RHU Notes</div><div class="detail-val">${c.rhu_notes}</div></div>` : ''}
-              </div>
-              <div style="margin-top:10px;display:flex;gap:6px">
-                <button class="btn btn-primary" style="font-size:11px;padding:5px 10px"
-                  onclick="event.stopPropagation();showPage('pending');setTimeout(()=>document.getElementById('pending-search')?.focus(),300)">
-                  ✏️ Review Case
-                </button>
-                ${c.status==='Confirmed' ? `
-                <button class="btn ${c.is_active===false?'btn-ghost':'btn-danger'}" style="font-size:11px;padding:5px 10px"
-                  onclick="event.stopPropagation();toggleCaseActive('${c.id}', ${c.is_active===false})">
-                  ${c.is_active===false?'⚪ Reactivate Case':'🔴 Mark Resolved / Inactive'}
-                </button>` : ''}
-              </div>
-            </div>
-          </div>`;
-        }).join('');
+    const casesHtml = renderCaseItemsHTML(cases, safeId);
 
     return `
     <div class="brgy-list-item" id="brgy-item-${safeId}">
@@ -1555,9 +1789,25 @@ function toggleBrgyList(safeId, brgy) {
   }
 }
 
+function toggleDashBrgyRow(safeId) {
+  const row = document.getElementById('dash-brgy-row-' + safeId);
+  const chev = document.getElementById('dash-chev-' + safeId);
+  if (!row) return;
+  const isOpen = row.style.display !== 'none';
+  // Close any other open barangay row so only one is expanded at a time
+  document.querySelectorAll('[id^="dash-brgy-row-"]').forEach(r => r.style.display = 'none');
+  document.querySelectorAll('[id^="dash-chev-"]').forEach(c => c.classList.remove('open'));
+  if (!isOpen) {
+    row.style.display = '';
+    if (chev) chev.classList.add('open');
+  }
+}
+
 function toggleCaseDetail(id) {
   const el = document.getElementById(id);
   if (el) el.classList.toggle('open');
+  const chev = document.getElementById('chev-' + id);
+  if (chev) chev.classList.toggle('open');
 }
 
 function showBrgyDetail(brgy) {

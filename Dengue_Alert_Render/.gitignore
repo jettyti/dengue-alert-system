@@ -1,0 +1,12 @@
+# Secrets — never commit or zip these
+server/.env
+server/serviceAccountKey.json
+*.env
+
+# Dependencies
+node_modules/
+server/node_modules/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db

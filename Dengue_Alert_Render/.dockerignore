@@ -1,0 +1,9 @@
+server/.env
+server/serviceAccountKey.json
+server/node_modules
+node_modules
+database
+.git
+.gitignore
+*.md
+start-server.bat

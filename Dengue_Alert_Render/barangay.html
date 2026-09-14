@@ -115,6 +115,18 @@
   .chip.info-chip { background: var(--info-bg); color: var(--info); border: 1px solid rgba(99,179,237,0.3); }
   .chip.pending { background: rgba(236,201,75,0.12); color: var(--yellow); border: 1px solid rgba(236,201,75,0.3); }
 
+  /* Tap-to-expand case rows (used in Recent Cases & Case History) */
+  .brgy-chevron { color: var(--muted); font-size: 12px; transition: transform .2s; display: inline-block; }
+  .brgy-chevron.open { transform: rotate(90deg); }
+  .case-detail-row { display: none; }
+  .case-detail-row.open { display: table-row; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .detail-field { font-size: 12px; }
+  .detail-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .detail-val { color: var(--text); margin-top: 2px; font-size: 13px; }
+  tr.tappable-row { cursor: pointer; transition: background .12s; }
+  tr.tappable-row:hover { background: var(--surface2); }
+
   /* Form */
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .form-full { grid-column: 1 / -1; }
@@ -1246,20 +1258,13 @@ async function loadDashboard() {
     banner.querySelector('div').textContent = '✅';
   }
 
-  // Recent cases table
+  // Recent cases table — tap a row to drop down full case details
   const tbody = document.getElementById('recent-cases-tbody');
   const recent = cases.slice(0, 8);
   if (recent.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No cases submitted yet.</td></tr>';
   } else {
-    tbody.innerHTML = recent.map(c => `
-      <tr>
-        <td><strong>${c.patient_name}</strong></td>
-        <td>${c.patient_age || '—'}</td>
-        <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
-        <td>${caseTypeChipHTML(c.severity)}</td>
-        <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':c.status==='Rejected'?'high':'info-chip'}">${c.status}</span></td>
-      </tr>`).join('');
+    tbody.innerHTML = recent.map(c => renderCaseRowPair(c, 'recent', 5)).join('');
   }
 
   // Alerts feed (RHU confirmations, etc.)
@@ -1604,16 +1609,76 @@ function renderHistory(cases) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No cases found.</td></tr>';
     return;
   }
-  tbody.innerHTML = cases.map(c => `
-    <tr>
-      <td><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted)">${c.patient_address || '—'}</span></td>
+  tbody.innerHTML = cases.map(c => renderCaseRowPair(c, 'hist', 7)).join('');
+}
+
+// ── SHARED: tap-to-expand case row (used by Recent Cases + Case History) ──
+// Renders the visible summary <tr> plus a hidden detail <tr> underneath it
+// that opens on click, showing the full patient record without leaving the
+// table (mirrors the same drop-down pattern used on the RHU dashboard).
+let _caseRowIdCounter = 0;
+function renderCaseRowPair(c, groupId, colCount) {
+  const safeId = `${groupId}_${(_caseRowIdCounter++)}`;
+  const statusColor = c.status==='Confirmed'?'#48bb78':c.status==='Pending'?'#ecc94b':c.status==='Rejected'?'#f56565':'#718096';
+  const summaryCells = groupId === 'hist' ? `
+      <td><strong>${c.patient_name}</strong><br><span style="font-size:11px;color:var(--muted);padding-left:18px">${c.patient_address || '—'}</span></td>
       <td>${c.patient_age || '—'} / ${c.patient_sex || '—'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
       <td>${caseTypeChipHTML(c.severity)}</td>
       <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':c.status==='Rejected'?'high':'info-chip'}">${c.status}</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${formatDate(c.report_date)}</td>
-      <td style="font-size:12px;color:var(--muted)">${c.rhu_notes || '—'}</td>
-    </tr>`).join('');
+      <td style="font-size:12px;color:var(--muted)">${c.rhu_notes || '—'}</td>` : `
+      <td><strong>${c.patient_name}</strong></td>
+      <td>${c.patient_age || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${c.onset_date}</td>
+      <td>${caseTypeChipHTML(c.severity)}</td>
+      <td><span class="chip ${c.status==='Confirmed'?'low':c.status==='Pending'?'pending':c.status==='Rejected'?'high':'info-chip'}">${c.status}</span></td>`;
+
+  // Prefix a small chevron onto the first cell so it's clear the row expands
+  const withChevron = summaryCells.replace(
+    /<td><strong>/,
+    `<td><span class="brgy-chevron" id="chev-${safeId}" style="margin-right:6px">▶</span><strong>`
+  );
+
+  return `
+    <tr class="tappable-row" onclick="toggleCaseRow('${safeId}')">${withChevron}</tr>
+    <tr class="case-detail-row" id="detail-${safeId}">
+      <td colspan="${colCount}" style="padding:0;background:var(--surface2)">
+        <div style="padding:14px 20px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Patient Information</div>
+          <div class="detail-grid">
+            <div class="detail-field"><div class="detail-label">Full Name</div><div class="detail-val">${c.patient_name || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Age</div><div class="detail-val">${c.patient_age || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Sex</div><div class="detail-val">${c.patient_sex || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Address</div><div class="detail-val">${c.patient_address || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Mobile Number</div><div class="detail-val">${c.patient_contact ? `<a href="tel:${c.patient_contact}" style="color:var(--info);text-decoration:none">📞 ${c.patient_contact}</a>` : '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Onset Date</div><div class="detail-val">${c.onset_date || '—'}</div></div>
+            <div class="detail-field"><div class="detail-label">Case Type</div><div class="detail-val" style="color:${caseTypeColor(c.severity)}">${caseTypeLabel(c.severity) || 'TBD by RHU'}</div></div>
+            <div class="detail-field"><div class="detail-label">Status</div><div class="detail-val" style="color:${statusColor}">${c.status}</div></div>
+            <div class="detail-field" style="grid-column:1/-1"><div class="detail-label">Symptoms</div><div class="detail-val">${Array.isArray(c.symptoms)?c.symptoms.join(', '):(c.symptoms||'—')}</div></div>
+            <div class="detail-field"><div class="detail-label">Reported</div><div class="detail-val">${formatDate(c.report_date)}</div></div>
+            ${c.rhu_notes ? `<div class="detail-field" style="grid-column:1/-1"><div class="detail-label">RHU Notes</div><div class="detail-val">${c.rhu_notes}</div></div>` : ''}
+          </div>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function toggleCaseRow(safeId) {
+  const row = document.getElementById('detail-' + safeId);
+  const chev = document.getElementById('chev-' + safeId);
+  if (!row) return;
+  const isOpen = row.classList.contains('open');
+  // Close any other open row in the same table so only one is expanded
+  const table = row.closest('table');
+  if (table) {
+    table.querySelectorAll('.case-detail-row.open').forEach(r => r.classList.remove('open'));
+    table.querySelectorAll('.brgy-chevron.open').forEach(c => c.classList.remove('open'));
+  }
+  if (!isOpen) {
+    row.classList.add('open');
+    if (chev) chev.classList.add('open');
+  }
 }
 
 function filterCases() {
