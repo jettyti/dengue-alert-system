@@ -319,9 +319,16 @@ app.post('/forgot-password/find', authLimiter, requireAuthBackend, async (req, r
     const email = String(req.body.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ success: false, error: 'Email required' });
     const db = admin.firestore();
-    const snap = await db.collection('bhw_accounts').where('email', '==', email).where('role', '==', 'bhw').get();
-    if (snap.empty) return res.status(404).json({ success: false, error: 'No registered account found with that email address' });
-    res.json({ success: true, accountId: snap.docs[0].id });
+    // Don't filter by role in the query: accounts approved via the RHU panel
+    // can carry role "barangay" while self-registered ones carry "bhw".
+    // /login treats both as the same role, so do the same here.
+    const snap = await db.collection('bhw_accounts').where('email', '==', email).get();
+    const match = snap.docs.find(d => {
+      const r = d.data().role;
+      return !r || r === 'bhw' || r === 'barangay';
+    });
+    if (!match) return res.status(404).json({ success: false, error: 'No registered account found with that email address' });
+    res.json({ success: true, accountId: match.id });
   } catch (err) {
     console.error('[DengueAlert] /forgot-password/find error:', err.message);
     res.status(500).json({ success: false, error: 'Lookup failed' });
