@@ -238,9 +238,37 @@ app.post('/register', authLimiter, requireAuthBackend, async (req, res) => {
 
     const db = admin.firestore();
     const normalizedEmail = String(email).trim().toLowerCase();
+    // One barangay = one account. A pending or approved account holds the slot;
+    // rejected/revoked ones free it up so the barangay can register again.
+    const brgyNorm = String(barangay).trim().toLowerCase();
+    const brgySnap = await db.collection('bhw_accounts').get();
+    const holder = brgySnap.docs.find(d => {
+      const a = d.data();
+      const st = a.status || 'approved';
+      return String(a.barangay || '').trim().toLowerCase() === brgyNorm
+        && (a.role === undefined || a.role === 'bhw' || a.role === 'barangay')
+        && (st === 'pending' || st === 'approved');
+    });
+    if (holder) {
+      const st = holder.data().status === 'pending' ? 'is waiting for RHU approval' : 'already exists';
+      return res.status(409).json({ success: false, error: `Barangay ${barangay} already has an account that ${st}. Only one account is allowed per barangay — please contact the RHU if you need it changed.` });
+    }
+
+    // One email = one account = one barangay, system-wide.
     const existing = await db.collection('bhw_accounts').where('email', '==', normalizedEmail).get();
-    if (!existing.empty)
-      return res.status(409).json({ success: false, error: 'An account with this email already exists' });
+    let dupe = existing.docs[0];
+    if (!dupe) {
+      // Older records may have been saved with capital letters in the email
+      const rawEmail = String(email).trim();
+      if (rawEmail !== normalizedEmail) {
+        const alt = await db.collection('bhw_accounts').where('email', '==', rawEmail).get();
+        dupe = alt.docs[0];
+      }
+    }
+    if (dupe) {
+      const where = dupe.data().barangay ? ` (registered to Barangay ${dupe.data().barangay})` : '';
+      return res.status(409).json({ success: false, error: `This email already has an account${where}. One email can only be used for one barangay.` });
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
     await db.collection('bhw_accounts').add({
@@ -296,7 +324,36 @@ app.post('/login', authLimiter, requireAuthBackend, async (req, res) => {
     if (user.status === 'rejected')
       return res.status(403).json({ success: false, error: 'Your registration was not approved' });
 
-    const claims = { role: normalizedRole, barangay: barangay || user.barangay || '', name: user.name || '' };
+    // ── ONE ACCOUNT = ONE BARANGAY ─────────────────────────────
+    // The barangay a BHW may enter is the one saved on their account, never
+    // whatever they pick in the login dropdown. Checked only after the
+    // password is verified, so it can't be used to probe which barangay an
+    // email belongs to.
+    let boundBarangay = '';
+    if (normalizedRole === 'bhw') {
+      const norm = v => String(v || '').trim().toLowerCase();
+      const registered = String(user.barangay || '').trim();
+      if (registered) {
+        if (barangay && norm(barangay) !== norm(registered)) {
+          return res.status(403).json({
+            success: false,
+            error: `This account is registered to Barangay ${registered}. You can only log in to that barangay.`
+          });
+        }
+        boundBarangay = registered;
+      } else {
+        // Legacy account with no barangay on file: lock it to the one chosen
+        // at this first login so it can't be used in another barangay later.
+        boundBarangay = String(barangay || '').trim();
+        if (boundBarangay) await doc.ref.update({ barangay: boundBarangay });
+      }
+    }
+
+    const claims = {
+      role: normalizedRole,
+      barangay: normalizedRole === 'bhw' ? boundBarangay : (barangay || user.barangay || ''),
+      name: user.name || ''
+    };
     const token = await admin.auth().createCustomToken(user.id, claims);
 
     res.json({
