@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -32,7 +33,7 @@
     font-family: 'DM Sans', sans-serif;
     min-height: 100vh;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     position: relative;
     overflow-x: hidden;
@@ -61,26 +62,31 @@
     pointer-events: none;
   }
 
-  /* Full-width layout with side panels */
+  /* Three-column layout: tips | login | live graphs + prevention tips */
   .login-page {
     position: relative;
     z-index: 1;
     width: 100%;
-    max-width: 1200px;
-    padding: 24px;
+    max-width: 1680px;
+    padding: 28px 32px;
     display: grid;
-    grid-template-columns: 1fr 460px 1fr;
-    gap: 32px;
-    align-items: center;
+    grid-template-columns: minmax(250px, 285px) 430px minmax(0, 1fr);
+    grid-template-areas: "left login right";
+    gap: 24px;
+    align-items: start;
     min-height: 100vh;
     animation: fade-in 0.5s ease;
   }
+  .tips-left  { grid-area: left; }
+  .login-wrap { grid-area: login; }
+  .right-col  { grid-area: right; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
   .login-wrap {
     position: relative;
     z-index: 1;
     width: 100%;
-    max-width: 460px;
+    max-width: 430px;
+    justify-self: center;
     animation: fade-in 0.5s ease;
   }
 
@@ -363,6 +369,67 @@
     font-family: 'DM Mono', monospace;
   }
 
+  /* ── LIVE GRAPHS PANEL (top-right) ───────────────────────── */
+  .live-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+    animation: fade-in 0.6s ease;
+  }
+  .live-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .live-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+  .live-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .live-status {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-size: 11px; font-family: 'DM Mono', monospace; color: var(--muted);
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px;
+  }
+  .live-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .live-status.ok .dot   { background: var(--safe); box-shadow: 0 0 0 0 rgba(72,187,120,0.6); animation: live-pulse 2s infinite; }
+  .live-status.wait .dot { background: var(--warn); animation: live-pulse 1s infinite; }
+  .live-status.err .dot  { background: var(--accent); }
+  @keyframes live-pulse { 70% { box-shadow: 0 0 0 6px rgba(72,187,120,0); } 100% { box-shadow: 0 0 0 0 rgba(72,187,120,0); } }
+
+  .live-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .kpi { background: var(--surface2); border-radius: 10px; padding: 9px 12px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-left: 3px solid var(--border); }
+  .kpi.red { border-left-color: var(--accent); } .kpi.orange { border-left-color: var(--warn); } .kpi.blue { border-left-color: var(--info); }
+  .kpi-label { font-size: 11px; color: var(--muted); line-height: 1.25; }
+  .kpi-val { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 600; line-height: 1; }
+  .kpi.red .kpi-val { color: var(--accent); } .kpi.orange .kpi-val { color: var(--warn); } .kpi.blue .kpi-val { color: var(--info); }
+
+  .live-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
+  .chart-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 8px; min-width: 0; }
+  .chart-title { font-size: 12.5px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .chart-title span { font-size: 11px; font-weight: 500; color: var(--muted); }
+  .chart-wrap { position: relative; height: clamp(230px, 31vh, 330px); }
+
+  .live-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .live-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .live-legend i.dash { height: 0; width: 16px; border-top: 2px dashed rgba(237,137,54,0.8); border-radius: 0; vertical-align: 3px; }
+
+  .live-overlay {
+    position: absolute; inset: 0; z-index: 3; border-radius: 14px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    text-align: center; padding: 24px; font-size: 13px; color: var(--muted); line-height: 1.5;
+  }
+  .live-overlay.show { display: flex; }
+  .live-overlay button {
+    background: var(--info); color: #0c1a2e; border: none; border-radius: 8px; padding: 8px 16px;
+    font-family: inherit; font-weight: 700; font-size: 12.5px; cursor: pointer;
+  }
+  .live-spin { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--info); border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+  /* Prevention tips: compact 3-up row under the graphs */
+  .tips-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .tips-row .tips-panel-title { grid-column: 1 / -1; margin-bottom: 0; }
+  .tips-row .tip-card { padding: 12px 14px; }
+  .tips-row .tip-card-body { font-size: 11.5px; line-height: 1.5; }
+  .tips-row .tip-card-body li { margin-bottom: 2px; }
+
   /* ── LIGHT MODE ─────────────────────────────────────────── */
   body.light-mode {
     --bg: #f0f4f8; --surface: #ffffff; --surface2: #e8edf3; --border: #cbd5e0;
@@ -373,14 +440,22 @@
   body.light-mode .grid-bg { opacity: 0.4; }
 
   /* ── RESPONSIVE ─────────────────────────────────────────── */
-  @media (max-width: 1100px) {
-    .login-page { grid-template-columns: 1fr 460px; }
-    .tips-panel:last-child { display: none; }
+  @media (max-width: 1280px) {
+    .login-page {
+      grid-template-columns: 430px minmax(0, 1fr);
+      grid-template-areas: "login right" "left left";
+    }
+    .tips-left { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .tips-left .tips-panel-title { grid-column: 1 / -1; margin-bottom: 0; }
+  }
+  @media (max-width: 960px) {
+    .login-page { grid-template-columns: 1fr; grid-template-areas: "login" "right" "left"; min-height: auto; padding: 16px; gap: 18px; }
+    .login-wrap { max-width: 520px; }
   }
   @media (max-width: 760px) {
-    .login-page { grid-template-columns: 1fr; padding: 16px; min-height: auto; }
-    .tips-panel { display: none; }
-    .login-wrap { max-width: 100%; }
+    .tips-left, .tips-row { display: none; }
+    .live-kpis { grid-template-columns: 1fr; }
+    .live-head { flex-direction: column; gap: 8px; }
   }
   @media (max-width: 520px) {
     .login-wrap { padding: 0; }
@@ -390,6 +465,7 @@
     .role-card { padding: 12px 10px; }
     .role-icon { font-size: 22px; }
     .login-body { padding: 16px; }
+    .live-card { padding: 14px 12px; }
   }
 </style>
 </head>
@@ -399,7 +475,7 @@
 <div class="login-page">
 
 <!-- LEFT TIPS PANEL -->
-<div class="tips-panel">
+<div class="tips-panel tips-left">
   <div class="tips-panel-title"><svg width="14" height="14" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12.7" cy="12.7" rx="2.3" ry="4.1" transform="rotate(20 12.7 12.7)"/><path d="M11 9.2 7.2 3.8"/><path d="M7.7 10.3 2.7 8M8.3 13 2.7 12.5M9.1 15.7 4.3 18"/><path d="M15.5 11.9 21.2 10.5M16.3 14.4l5 1.9M14.9 9.3l4.3-3.6"/><circle cx="7.2" cy="3.8" r="0.7" fill="currentColor" stroke="none"/></svg> Know Your Enemy</div>
 
   <div class="tip-card danger">
@@ -720,8 +796,50 @@
   <div class="version-tag">Dengue Alert v1.0 · Janiuay, Iloilo · 2025</div>
 </div><!-- /login-wrap -->
 
-<!-- RIGHT TIPS PANEL -->
-<div class="tips-panel">
+<!-- RIGHT COLUMN: live graphs (top) + prevention tips -->
+<div class="right-col">
+
+  <div class="live-card" id="live-card">
+    <div class="live-head">
+      <div>
+        <div class="live-title">Live Dengue Surveillance</div>
+        <div class="live-sub">Municipality of Janiuay · same figures as the RHU dashboard</div>
+      </div>
+      <div class="live-status wait" id="live-status"><span class="dot"></span><span id="live-status-text">Loading…</span></div>
+    </div>
+
+    <div class="live-kpis">
+      <div class="kpi red"><span class="kpi-label">Active<br>Cases</span><span class="kpi-val" id="kpi-active">–</span></div>
+      <div class="kpi orange"><span class="kpi-label">High-Risk<br>Barangays</span><span class="kpi-val" id="kpi-high">–</span></div>
+      <div class="kpi blue"><span class="kpi-label">Medium-Risk<br>Barangays</span><span class="kpi-val" id="kpi-med">–</span></div>
+    </div>
+
+    <div class="live-charts">
+      <div class="chart-box">
+        <div class="chart-title">Weekly Case Trend <span>Past 8 weeks</span></div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Cases by Barangay (Top 6) <span>Active cases</span></div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="live-legend">
+      <span><i class="dash"></i>Outbreak threshold (<span id="leg-threshold">5</span> cases)</span>
+      <span><i style="background:rgba(245,101,101,0.75)"></i>High risk</span>
+      <span><i style="background:rgba(237,137,54,0.75)"></i>Medium risk</span>
+      <span><i style="background:rgba(72,187,120,0.75)"></i>Low risk</span>
+    </div>
+
+    <div class="live-overlay" id="live-overlay">
+      <div class="live-spin" id="live-overlay-spin"></div>
+      <div id="live-overlay-text">Loading live data…</div>
+      <button id="live-retry" style="display:none" onclick="loadLiveStats()">Try again</button>
+    </div>
+  </div>
+
+<div class="tips-panel tips-row">
   <div class="tips-panel-title"><svg width="14" height="14" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 19 5.5v6c0 5.6-4 8.4-7 9.5-3-1.1-7-3.9-7-9.5v-6L12 2.5z"/></svg> Prevention Tips</div>
 
   <div class="tip-card safe">
@@ -775,6 +893,7 @@
     </div>
   </div>
 </div>
+</div><!-- /right-col -->
 
 </div><!-- /login-page -->
 
@@ -1134,6 +1253,149 @@
       document.getElementById('fp-save-text').innerHTML = ICON.lock + ' Update Password';
     }
   }
+
+  // ── LIVE GRAPHS (top-right) ──────────────────────────────────
+  // Same numbers as the RHU dashboard: the server (/public/stats) returns
+  // aggregate counts only, and the same risk rules as config.js are applied
+  // here (High ≥ outbreakThreshold, Medium ≥ 3, top 6 barangays by cases).
+  let liveTrend = null, liveBar = null, liveTimer = null, liveLoading = false;
+  const LIVE_CACHE_KEY = 'dengue_public_stats_v1';
+
+  function liveStatus(kind, text) {
+    document.getElementById('live-status').className = 'live-status ' + kind;
+    document.getElementById('live-status-text').textContent = text;
+  }
+  function liveOverlay(show, text, canRetry) {
+    document.getElementById('live-overlay').classList.toggle('show', !!show);
+    document.getElementById('live-overlay-text').textContent = text || '';
+    document.getElementById('live-overlay-spin').style.display = canRetry ? 'none' : '';
+    document.getElementById('live-retry').style.display = canRetry ? '' : 'none';
+  }
+  function fmtTime(d) { return new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  function fmtDay(d)  { return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' }); }
+
+  function renderLive(body) {
+    if (typeof Chart === 'undefined') { liveOverlay(true, 'Charts could not load. Check your internet connection and refresh.', false); return; }
+    const threshold = SYSTEM_CONFIG.outbreakThreshold;
+
+    // Per-barangay summary — identical rules to DB.getBarangayRisk() in config.js
+    const summary = {};
+    SYSTEM_CONFIG.barangays.forEach(b => { summary[b] = { barangay: b, cases: 0, risk: 'Low' }; });
+    Object.entries(body.barangay_cases || {}).forEach(([name, n]) => { if (summary[name]) summary[name].cases = n; });
+    const riskData = Object.values(summary);
+    riskData.forEach(r => { r.risk = r.cases >= threshold ? 'High' : r.cases >= 3 ? 'Medium' : 'Low'; });
+
+    document.getElementById('kpi-active').textContent = body.active_cases;
+    document.getElementById('kpi-high').textContent   = riskData.filter(r => r.risk === 'High').length;
+    document.getElementById('kpi-med').textContent    = riskData.filter(r => r.risk === 'Medium').length;
+    document.getElementById('leg-threshold').textContent = threshold;
+
+    const css = n => getComputedStyle(document.body).getPropertyValue(n).trim();
+    const tick = css('--muted'), grid = css('--border');
+    const axisFont = { size: 11, family: "'DM Sans', sans-serif" };
+
+    // Weekly trend (line) — W1..W8, with the outbreak-threshold line like rhu.html
+    const weeks = body.trend;
+    if (liveTrend) liveTrend.destroy();
+    liveTrend = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: weeks.map(w => w.label),
+        datasets: [{
+          label: 'Confirmed cases', data: weeks.map(w => w.count),
+          borderColor: '#f56565', backgroundColor: 'rgba(245,101,101,0.14)',
+          tension: 0.3, fill: true, pointBackgroundColor: '#f56565', pointRadius: 4, pointHoverRadius: 6
+        }, {
+          label: 'Outbreak threshold', data: Array(weeks.length).fill(threshold),
+          borderColor: 'rgba(237,137,54,0.7)', borderDash: [5, 5], pointRadius: 0, fill: false
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: {
+            title: items => { const w = weeks[items[0].dataIndex]; return `${w.label}  ·  ${fmtDay(w.from)} – ${fmtDay(w.to)}`; }
+          } }
+        },
+        scales: {
+          x: { grid: { color: grid }, ticks: { color: tick, font: axisFont } },
+          y: { grid: { color: grid }, ticks: { color: tick, font: axisFont, precision: 0 }, beginAtZero: true,
+               suggestedMax: threshold + 1 }
+        }
+      }
+    });
+
+    // Top 6 barangays (horizontal bars so full names stay readable)
+    const top6 = [...riskData].sort((a, b) => b.cases - a.cases).slice(0, 6);
+    const barColor = r => r.risk === 'High' ? 'rgba(245,101,101,0.75)' : r.risk === 'Medium' ? 'rgba(237,137,54,0.75)' : 'rgba(72,187,120,0.75)';
+    if (liveBar) liveBar.destroy();
+    liveBar = new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: top6.map(r => r.barangay.length > 22 ? r.barangay.substring(0, 21) + '…' : r.barangay),
+        datasets: [{ data: top6.map(r => r.cases), backgroundColor: top6.map(barColor), borderRadius: 4, barPercentage: 0.7 }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: {
+            title: items => top6[items[0].dataIndex].barangay,
+            label: ctx => { const r = top6[ctx.dataIndex]; return ` ${r.cases} active case${r.cases !== 1 ? 's' : ''} · ${r.risk} risk`; }
+          } }
+        },
+        scales: {
+          x: { grid: { color: grid }, ticks: { color: tick, font: axisFont, precision: 0 }, beginAtZero: true,
+               suggestedMax: threshold },
+          y: { grid: { display: false }, ticks: { color: tick, font: axisFont } }
+        }
+      }
+    });
+  }
+
+  async function loadLiveStats() {
+    if (liveLoading) return;
+    liveLoading = true;
+
+    // Show the last saved numbers instantly (if any) while the fresh ones load
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(LIVE_CACHE_KEY) || 'null'); } catch (e) {}
+    if (cached && cached.body) { renderLive(cached.body); liveOverlay(false); liveStatus('wait', 'Updating…'); }
+    else { liveOverlay(true, 'Loading live data…', false); liveStatus('wait', 'Loading…'); }
+
+    // Render's free tier sleeps — tell the user if the first request is slow
+    const wakeNote = setTimeout(() => {
+      if (!cached) liveOverlay(true, 'Waking up the server — this can take up to a minute the first time…', false);
+      liveStatus('wait', 'Waking server…');
+    }, 4000);
+    const ctrl = new AbortController();
+    const abortTimer = setTimeout(() => ctrl.abort(), 75000);
+
+    try {
+      const res  = await fetch(`${SMS_SERVER_URL}/public/stats`, { signal: ctrl.signal });
+      const body = await res.json();
+      if (!res.ok || !body.success) throw new Error(body.error || 'Request failed');
+      renderLive(body);
+      try { localStorage.setItem(LIVE_CACHE_KEY, JSON.stringify({ at: Date.now(), body })); } catch (e) {}
+      liveOverlay(false);
+      liveStatus('ok', 'Live · ' + fmtTime(body.generated_at));
+    } catch (e) {
+      if (cached && cached.body) {
+        liveStatus('err', 'Offline · saved ' + fmtTime(cached.at));
+      } else {
+        liveOverlay(true, 'Live data is unavailable right now. Please try again in a moment.', true);
+        liveStatus('err', 'Unavailable');
+      }
+    } finally {
+      clearTimeout(wakeNote); clearTimeout(abortTimer); liveLoading = false;
+    }
+  }
+
+  loadLiveStats();
+  // Refresh every 5 minutes while the tab is open and visible
+  setInterval(() => { if (!document.hidden) loadLiveStats(); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>

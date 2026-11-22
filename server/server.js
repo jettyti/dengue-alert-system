@@ -220,6 +220,81 @@ app.get('/test-connection', apiKeyAuth, async (req, res) => {
   }
 });
 
+// ── PUBLIC DASHBOARD STATS (for the graphs on the login page) ──
+// Logged-out visitors can't read Firestore (see firestore.rules — cases
+// contain patient PII), so the login page asks THIS route instead. It uses
+// the Admin SDK and returns ONLY aggregate counts: no names, addresses,
+// contacts or case IDs ever leave the server through here.
+//
+// The numbers use the same rules as rhu.html so the login-page graphs match
+// the RHU dashboard:
+//   • Weekly trend  = Confirmed cases whose onset_date falls in each of the
+//                     last 8 rolling 7-day windows (same as rhu.html's
+//                     "Weekly Case Trend", which does not filter by active)
+//   • Barangay bars = Confirmed AND active (is_active !== false) cases per
+//                     barangay (same as getBarangayRisk() in config.js)
+const publicStatsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, error: 'Too many requests. Please slow down.' }
+});
+let _publicStatsCache = null;           // { at: ms, body: {...} }
+const PUBLIC_STATS_TTL_MS = 60 * 1000;  // refresh from Firestore at most once a minute
+
+app.get('/public/stats', publicStatsLimiter, requireAuthBackend, async (req, res) => {
+  try {
+    const nowMs = Date.now();
+    if (_publicStatsCache && nowMs - _publicStatsCache.at < PUBLIC_STATS_TTL_MS) {
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.json(_publicStatsCache.body);
+    }
+
+    // .select() = only fetch the fields we need (never the patient fields)
+    const snap = await admin.firestore().collection('dengue_cases')
+      .select('status', 'onset_date', 'barangay', 'is_active').get();
+    const cases = snap.docs.map(d => d.data());
+
+    const DAY = 24 * 60 * 60 * 1000;
+    const confirmed = cases.filter(c => c.status === 'Confirmed');
+
+    // 8 weekly windows, oldest → newest, labelled W1..W8 like the RHU chart
+    const trend = [];
+    for (let i = 7; i >= 0; i--) {
+      const start = nowMs - (i + 1) * 7 * DAY;
+      const end   = nowMs - i * 7 * DAY;
+      const count = confirmed.filter(c => {
+        const t = new Date(c.onset_date).getTime();
+        return t >= start && t < end;
+      }).length;
+      trend.push({ label: `W${8 - i}`, count, from: new Date(start).toISOString(), to: new Date(end).toISOString() });
+    }
+
+    // Active confirmed cases per barangay (the client fills in the barangays
+    // that have none, using the same SYSTEM_CONFIG.barangays list as the RHU)
+    const barangayCases = {};
+    let activeTotal = 0;
+    confirmed.forEach(c => {
+      if (c.is_active === false) return;
+      activeTotal++;
+      if (c.barangay) barangayCases[c.barangay] = (barangayCases[c.barangay] || 0) + 1;
+    });
+
+    const body = {
+      success: true,
+      generated_at: new Date(nowMs).toISOString(),
+      active_cases: activeTotal,
+      trend,
+      barangay_cases: barangayCases
+    };
+    _publicStatsCache = { at: nowMs, body };
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json(body);
+  } catch (err) {
+    console.error('[DengueAlert] /public/stats failed:', err.message);
+    res.status(500).json({ success: false, error: 'Could not load statistics' });
+  }
+});
+
 // ── AUTH ROUTES (server-mediated login/register) ───────────────
 // Passwords are hashed with bcrypt and never leave this server. The
 // browser never reads the admin/bhw_accounts collections directly —
