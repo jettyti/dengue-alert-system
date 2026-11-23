@@ -70,16 +70,18 @@
     max-width: 1680px;
     padding: 28px 32px;
     display: grid;
-    grid-template-columns: minmax(250px, 285px) 430px minmax(0, 1fr);
-    grid-template-areas: "left login right";
+    grid-template-columns: minmax(0, 1fr) 430px minmax(0, 1fr);
+    grid-template-areas: "left login right" "tips tips tips";
     gap: 24px;
     align-items: start;
     min-height: 100vh;
     animation: fade-in 0.5s ease;
   }
-  .tips-left  { grid-area: left; }
+  /* Equal 1fr side columns keep the login exactly centred on the page.
+     Tips hug the login from the left, the graph hugs it from the right. */
+  .tips-left  { grid-area: left;  width: 100%; max-width: 340px; justify-self: end; }
   .login-wrap { grid-area: login; }
-  .right-col  { grid-area: right; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .right-col  { grid-area: right; width: 100%; max-width: 640px; justify-self: start; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
   .login-wrap {
     position: relative;
@@ -375,12 +377,12 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 16px 18px 14px;
+    padding: 14px 16px 12px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.3);
     animation: fade-in 0.6s ease;
   }
   .live-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  .live-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+  .live-title { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
   .live-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
   .live-status {
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -393,20 +395,20 @@
   .live-status.err .dot  { background: var(--accent); }
   @keyframes live-pulse { 70% { box-shadow: 0 0 0 6px rgba(72,187,120,0); } 100% { box-shadow: 0 0 0 0 rgba(72,187,120,0); } }
 
-  .live-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .live-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
   .kpi { background: var(--surface2); border-radius: 10px; padding: 9px 12px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-left: 3px solid var(--border); }
   .kpi.red { border-left-color: var(--accent); } .kpi.orange { border-left-color: var(--warn); } .kpi.blue { border-left-color: var(--info); }
   .kpi-label { font-size: 11px; color: var(--muted); line-height: 1.25; }
-  .kpi-val { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 600; line-height: 1; }
+  .kpi-val { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; line-height: 1; }
   .kpi.red .kpi-val { color: var(--accent); } .kpi.orange .kpi-val { color: var(--warn); } .kpi.blue .kpi-val { color: var(--info); }
 
-  .live-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
-  .chart-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 8px; min-width: 0; }
+  .live-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+  .chart-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px 6px; min-width: 0; }
   .chart-title { font-size: 12.5px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
   .chart-title span { font-size: 11px; font-weight: 500; color: var(--muted); }
-  .chart-wrap { position: relative; height: clamp(230px, 31vh, 330px); }
+  .chart-wrap { position: relative; height: clamp(150px, 20vh, 205px); }
 
-  .live-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .live-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 11px; color: var(--muted); }
   .live-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .live-legend i.dash { height: 0; width: 16px; border-top: 2px dashed rgba(237,137,54,0.8); border-radius: 0; vertical-align: 3px; }
 
@@ -424,7 +426,7 @@
   .live-spin { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--info); border-radius: 50%; animation: spin 0.8s linear infinite; }
 
   /* Prevention tips: compact 3-up row under the graphs */
-  .tips-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .tips-row { grid-area: tips; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .tips-row .tips-panel-title { grid-column: 1 / -1; margin-bottom: 0; }
   .tips-row .tip-card { padding: 12px 14px; }
   .tips-row .tip-card-body { font-size: 11.5px; line-height: 1.5; }
@@ -443,13 +445,14 @@
   @media (max-width: 1280px) {
     .login-page {
       grid-template-columns: 430px minmax(0, 1fr);
-      grid-template-areas: "login right" "left left";
+      grid-template-areas: "login right" "left left" "tips tips";
     }
-    .tips-left { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .right-col { max-width: none; justify-self: stretch; }
+    .tips-left { max-width: none; justify-self: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
     .tips-left .tips-panel-title { grid-column: 1 / -1; margin-bottom: 0; }
   }
   @media (max-width: 960px) {
-    .login-page { grid-template-columns: 1fr; grid-template-areas: "login" "right" "left"; min-height: auto; padding: 16px; gap: 18px; }
+    .login-page { grid-template-columns: 1fr; grid-template-areas: "login" "right" "left" "tips"; min-height: auto; padding: 16px; gap: 18px; }
     .login-wrap { max-width: 520px; }
   }
   @media (max-width: 760px) {
@@ -839,6 +842,9 @@
     </div>
   </div>
 
+</div><!-- /right-col -->
+
+<!-- PREVENTION TIPS (full-width row under everything) -->
 <div class="tips-panel tips-row">
   <div class="tips-panel-title"><svg width="14" height="14" style="vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 19 5.5v6c0 5.6-4 8.4-7 9.5-3-1.1-7-3.9-7-9.5v-6L12 2.5z"/></svg> Prevention Tips</div>
 
@@ -893,7 +899,6 @@
     </div>
   </div>
 </div>
-</div><!-- /right-col -->
 
 </div><!-- /login-page -->
 
@@ -1334,7 +1339,7 @@
     liveBar = new Chart(document.getElementById('barChart'), {
       type: 'bar',
       data: {
-        labels: top6.map(r => r.barangay.length > 22 ? r.barangay.substring(0, 21) + '…' : r.barangay),
+        labels: top6.map(r => r.barangay.length > 15 ? r.barangay.substring(0, 14) + '…' : r.barangay),
         datasets: [{ data: top6.map(r => r.cases), backgroundColor: top6.map(barColor), borderRadius: 4, barPercentage: 0.7 }]
       },
       options: {
@@ -1347,7 +1352,7 @@
           } }
         },
         scales: {
-          x: { grid: { color: grid }, ticks: { color: tick, font: axisFont, precision: 0 }, beginAtZero: true,
+          x: { grid: { color: grid }, ticks: { color: tick, font: axisFont, precision: 0, maxTicksLimit: 7 }, beginAtZero: true,
                suggestedMax: threshold },
           y: { grid: { display: false }, ticks: { color: tick, font: axisFont } }
         }
